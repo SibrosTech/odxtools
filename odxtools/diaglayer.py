@@ -100,6 +100,7 @@ class DiagLayer:
                  requests: List[Request] = [],
                  positive_responses: List[Response] = [],
                  negative_responses: List[Response] = [],
+                 global_negative_responses: List[Response] = [],
                  services: List[DiagService] = [],
                  single_ecu_jobs: List[SingleEcuJob] = [],
                  diag_comm_refs: List[OdxLinkRef] = [],
@@ -129,7 +130,8 @@ class DiagLayer:
                                                           positive_responses)
         self.negative_responses = NamedItemList[Response](short_name_as_id,
                                                           negative_responses)
-
+        self.global_negative_responses = NamedItemList[Response](short_name_as_id,
+                                                                 global_negative_responses)
         # ParentRefs
         self.parent_refs = parent_refs
 
@@ -630,6 +632,12 @@ def read_diag_layer_from_odx(et_element,
         assert isinstance(nr, Response)
         negative_responses.append(nr)
 
+    global_negative_responses = []
+    for global_nr_elem in et_element.iterfind("GLOBAL-NEG-RESPONSES/GLOBAL-NEG-RESPONSE"):
+        gnr = read_structure_from_odx(global_nr_elem, doc_frags)
+        assert isinstance(gnr, Response)
+        global_negative_responses.append(gnr)
+
     additional_audiences = [read_additional_audience_from_odx(el, doc_frags)
                             for el in et_element.iterfind("ADDITIONAL-AUDIENCES/ADDITIONAL-AUDIENCE")]
 
@@ -668,6 +676,7 @@ def read_diag_layer_from_odx(et_element,
                    requests=requests,
                    positive_responses=positive_responses,
                    negative_responses=negative_responses,
+                   global_negative_responses=global_negative_responses,
                    services=services,
                    diag_comm_refs=diag_comm_refs,
                    single_ecu_jobs=single_ecu_jobs,

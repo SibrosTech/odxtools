@@ -539,7 +539,7 @@ def read_structure_from_odx(et_element, doc_frags: List[OdxDocFragment]) -> Unio
             long_name=long_name,
             description=description
         )
-    elif et_element.tag in ["POS-RESPONSE", "NEG-RESPONSE"]:
+    elif et_element.tag in ["POS-RESPONSE", "NEG-RESPONSE", "GLOBAL-NEG-RESPONSE"]:
         res = Response(
             odx_id,
             short_name,
