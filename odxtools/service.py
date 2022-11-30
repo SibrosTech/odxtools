@@ -3,18 +3,18 @@
 
 from typing import List, Iterable, Optional, Union
 
-from .utils import short_name_as_id
 from .audience import Audience, read_audience_from_odx
-from .functionalclass import FunctionalClass
-from .state import State
-from .utils import read_description_from_odx
 from .exceptions import DecodeError
-from .parameters import Parameter
+from .functionalclass import FunctionalClass
+from .message import Message
+from .nameditemlist import NamedItemList
 from .odxlink import OdxLinkRef, OdxLinkId, OdxDocFragment, OdxLinkDatabase
+from .parameters import Parameter
+from .state import State
 from .state_transition import StateTransition
 from .structures import Request, Response
-from .nameditemlist import NamedItemList
-from .message import Message
+from .utils import read_description_from_odx
+from .utils import short_name_as_id
 
 
 class DiagService:
@@ -27,6 +27,7 @@ class DiagService:
                  long_name: Optional[str] = None,
                  description: Optional[str] = None,
                  semantic: Optional[str] = None,
+                 addressing: Optional[str] = None,
                  audience: Optional[Audience] = None,
                  functional_class_refs: Iterable[OdxLinkRef] = [],
                  pre_condition_state_refs: Iterable[OdxLinkRef] = [],
@@ -48,6 +49,7 @@ class DiagService:
         self.long_name: Optional[str] = long_name
         self.description: Optional[str] = description
         self.semantic: Optional[str] = semantic
+        self.addressing: Optional[str] = addressing
         self.audience: Optional[Audience] = audience
         self.functional_class_refs: List[OdxLinkRef] = list(functional_class_refs)
         self._functional_classes: Union[List[FunctionalClass],
@@ -108,7 +110,7 @@ class DiagService:
         return self._request
 
     @property
-    def free_parameters(self) -> Optional[List[Union[Parameter, "EndOfPduField"]]]: # type: ignore
+    def free_parameters(self) -> Optional[List[Union[Parameter, "EndOfPduField"]]]:  # type: ignore
         """Return the list of parameters which can be freely specified by
         the user when encoding the service's request.
         """
@@ -210,7 +212,7 @@ class DiagService:
         assert not missing_params, f"The parameters {missing_params} are required but missing!"
 
         # make sure that no unknown parameters are specified
-        rq_all_param_names = { x.short_name for x in self.request.parameters }
+        rq_all_param_names = {x.short_name for x in self.request.parameters}
         assert set(params.keys()).issubset(rq_all_param_names), \
             f"Unknown parameters specified for encoding: {params.keys()}, known parameters are: {rq_all_param_names}"
         return self.request.encode(**params)
@@ -240,7 +242,6 @@ class DiagService:
 
 
 def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
-
     # logger.info(f"Parsing service based on ET DiagService element: {et_element}")
     short_name = et_element.find("SHORT-NAME").text
     odx_id = OdxLinkId.from_et(et_element, doc_frags)
@@ -249,7 +250,7 @@ def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
     request_ref = OdxLinkRef.from_et(et_element.find("REQUEST-REF"), doc_frags)
     assert request_ref is not None
 
-    pos_res_refs = [ ]
+    pos_res_refs = []
     for el in et_element.iterfind("POS-RESPONSE-REFS/POS-RESPONSE-REF"):
         ref = OdxLinkRef.from_et(el, doc_frags)
         assert ref is not None
@@ -263,9 +264,9 @@ def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
 
     functional_class_refs = []
     for el in et_element.iterfind("FUNCT-CLASS-REFS/FUNCT-CLASS-REF"):
-         ref = OdxLinkRef.from_et(el, doc_frags)
-         assert ref is not None
-         functional_class_refs.append(ref)
+        ref = OdxLinkRef.from_et(el, doc_frags)
+        assert ref is not None
+        functional_class_refs.append(ref)
 
     pre_condition_state_refs = []
     for el in et_element.iterfind("PRE-CONDITION-STATE-REFS/PRE-CONDITION-STATE-REF"):
@@ -282,6 +283,7 @@ def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
     long_name = et_element.findtext("LONG-NAME")
     description = read_description_from_odx(et_element.find("DESC"))
     semantic = et_element.get("SEMANTIC")
+    addressing = et_element.get("ADDRESSING")
 
     audience = None
     if et_element.find("AUDIENCE"):
@@ -296,6 +298,7 @@ def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
                                long_name=long_name,
                                description=description,
                                semantic=semantic,
+                               addressing=addressing,
                                audience=audience,
                                functional_class_refs=functional_class_refs,
                                pre_condition_state_refs=pre_condition_state_refs,
