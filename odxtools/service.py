@@ -27,6 +27,7 @@ class DiagService:
                  long_name: Optional[str] = None,
                  description: Optional[str] = None,
                  semantic: Optional[str] = None,
+                 addressing: Optional[str] = None,
                  audience: Optional[Audience] = None,
                  functional_class_refs: Iterable[OdxLinkRef] = [],
                  pre_condition_state_refs: Iterable[OdxLinkRef] = [],
@@ -48,6 +49,7 @@ class DiagService:
         self.long_name: Optional[str] = long_name
         self.description: Optional[str] = description
         self.semantic: Optional[str] = semantic
+        self.addressing: Optional[str] = addressing
         self.audience: Optional[Audience] = audience
         self.functional_class_refs: List[OdxLinkRef] = list(functional_class_refs)
         self._functional_classes: Union[List[FunctionalClass],
@@ -283,6 +285,10 @@ def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
     description = read_description_from_odx(et_element.find("DESC"))
     semantic = et_element.get("SEMANTIC")
 
+    addressing = et_element.get("ADDRESSING")
+    if addressing is None:
+        addressing = "PHYSICAL"
+
     audience = None
     if et_element.find("AUDIENCE"):
         audience = read_audience_from_odx(et_element.find(
@@ -297,6 +303,7 @@ def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
                                description=description,
                                semantic=semantic,
                                audience=audience,
+                               addressing=addressing,
                                functional_class_refs=functional_class_refs,
                                pre_condition_state_refs=pre_condition_state_refs,
                                state_transition_refs=state_transition_refs)
