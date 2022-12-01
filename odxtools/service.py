@@ -285,9 +285,9 @@ def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
     description = read_description_from_odx(et_element.find("DESC"))
     semantic = et_element.get("SEMANTIC")
 
-    addressing = "PHYSICAL"
-    if et_element.find("ADDRESSING"):
-        addressing = et_element.get("ADDRESSING")
+    addressing = et_element.get("ADDRESSING")
+    if addressing is None:
+        addressing = "PHYSICAL"
 
     audience = None
     if et_element.find("AUDIENCE"):
