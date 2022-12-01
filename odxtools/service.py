@@ -265,9 +265,9 @@ def read_diag_service_from_odx(et_element, doc_frags: List[OdxDocFragment]):
 
     functional_class_refs = []
     for el in et_element.iterfind("FUNCT-CLASS-REFS/FUNCT-CLASS-REF"):
-        ref = OdxLinkRef.from_et(el, doc_frags)
-        assert ref is not None
-        functional_class_refs.append(ref)
+         ref = OdxLinkRef.from_et(el, doc_frags)
+         assert ref is not None
+         functional_class_refs.append(ref)
 
     pre_condition_state_refs = []
     for el in et_element.iterfind("PRE-CONDITION-STATE-REFS/PRE-CONDITION-STATE-REF"):
