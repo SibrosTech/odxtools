@@ -20,6 +20,7 @@ requires_list = [
     "python-can < 4.0",
     "can-isotp",
     "markdownify",
+    "deprecation",
 ]
 
 version_match = re.search(r"^__version__ = '(.*)'$",

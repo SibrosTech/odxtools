@@ -18,6 +18,7 @@ class LengthKeyParameter(ParameterWithDOP):
     """
 
     def __init__(self,
+                 *,
                  short_name,
                  odx_id,
                  dop_ref=None,
@@ -26,8 +27,9 @@ class LengthKeyParameter(ParameterWithDOP):
                  byte_position=None,
                  bit_position=None,
                  semantic=None,
-                 description=None):
-        super().__init__(short_name,
+                 description=None,
+                 **kwargs):
+        super().__init__(short_name=short_name,
                          parameter_type="LENGTH-KEY",
                          dop_ref=dop_ref,
                          dop_snref=dop_snref,
@@ -35,7 +37,8 @@ class LengthKeyParameter(ParameterWithDOP):
                          byte_position=byte_position,
                          bit_position=bit_position,
                          semantic=semantic,
-                         description=description)
+                         description=description,
+                         **kwargs)
         self.odx_id = odx_id
 
     def is_required(self):

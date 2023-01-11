@@ -2,6 +2,7 @@
 # Copyright (c) 2022 MBition GmbH
 
 
+import warnings
 from ..decodestate import DecodeState
 from ..exceptions import DecodeError
 
@@ -10,11 +11,10 @@ from .parameterbase import Parameter
 
 class ReservedParameter(Parameter):
     def __init__(self,
-                 short_name,
+                 *,
                  bit_length,
                  **kwargs):
-        super().__init__(short_name,
-                         parameter_type="RESERVED",
+        super().__init__(parameter_type="RESERVED",
                          **kwargs)
         self._bit_length = bit_length
 
@@ -49,11 +49,12 @@ class ReservedParameter(Parameter):
 
         # Bit-wise compare if reserved bits are 0.
         if expected & actual != 0:
-            raise DecodeError(
+            warnings.warn(
                 f"Reserved bits must be Zero! "
                 f"The parameter {self.short_name} expected {self.bit_length} bits to be Zero starting at bit position {bit_position_int} "
                 f"at byte position {byte_position} "
-                f"in coded message {decode_state.coded_message.hex()}."
+                f"in coded message {decode_state.coded_message.hex()}.",
+                DecodeError
             )
 
         return None, next_byte_position

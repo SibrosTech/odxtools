@@ -4,7 +4,8 @@
  # Copyright (c) 2022 MBition GmbH
 -#}
 
-{%- import('macros/printAudience.tpl') as paud %}
+{%- import('macros/printAudience.xml.jinja2') as paud %}
+{%- import('macros/printSpecialData.xml.jinja2') as psd %}
 
 {%- macro printService(service) -%}
 {%- if service.semantic is not none %}
@@ -22,6 +23,7 @@
  {{service.description}}
  </DESC>
 {%- endif %}
+ {{- psd.printSpecialDataGroups(service.sdgs)|indent(1, first=True) }}
 {%- if service.functional_class_refs %}
  <FUNCT-CLASS-REFS>
 {%- for ref in service.functional_class_refs %}

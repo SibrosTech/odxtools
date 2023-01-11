@@ -4,22 +4,25 @@
  # Copyright (c) 2022 MBition GmbH
 -#}
 
-{%- macro printAdminData(admin_data) -%}
+{%- import('macros/printSpecialData.xml.jinja2') as psd %}
+
+{%- macro printAdminData(admin_data) %}
 <ADMIN-DATA>
  {%- if admin_data.language is not none %}
  <LANGUAGE>{{admin_data.language|e}}</LANGUAGE>
  {%- endif %}
- {%- if admin_data.company_doc_infos is not none %}
+ {%- if admin_data.company_doc_infos %}
  <COMPANY-DOC-INFOS>
   {%- for cdi in admin_data.company_doc_infos %}
   <COMPANY-DOC-INFO>
     <COMPANY-DATA-REF ID-REF="{{cdi.company_data_ref.ref_id}}" />
    {%- if cdi.team_member_ref is not none %}
     <TEAM-MEMBER-REF ID-REF="{{cdi.team_member_ref.ref_id}}" />
-   {%- endif %}
+    {%- endif %}
    {%- if cdi.doc_label is not none %}
     <DOC-LABEL>{{cdi.doc_label|e}}</DOC-LABEL>
    {%- endif %}
+   {{- psd.printSpecialDataGroups(cdi.sdgs)|indent(1, first=True) }}
   </COMPANY-DOC-INFO>
   {%- endfor %}
  </COMPANY-DOC-INFOS>
@@ -41,6 +44,21 @@
    {%- if doc_revision.tool is not none %}
    <TOOL>{{doc_revision.tool|e}}</TOOL>
    {%- endif %}
+   {%- if doc_revision.company_revision_infos %}
+   <COMPANY-REVISION-INFOS>
+     {%- for cri in doc_revision.company_revision_infos %}
+     <COMPANY-REVISION-INFO>
+       <COMPANY-DATA-REF ID-REF="{{cri.company_data_ref.ref_id}}" />
+       {%- if cri.revision_label is not none %}
+       <REVISION-LABEL>{{cri.revision_label|e}}</REVISION-LABEL>
+       {%- endif %}
+       {%- if cri.state is not none %}
+       <STATE>{{cri.state|e}}</STATE>
+       {%- endif %}
+     </COMPANY-REVISION-INFO>
+     {%- endfor %}
+   </COMPANY-REVISION-INFOS>
+   {%- endif %}
    {%- if doc_revision.modifications %}
    <MODIFICATIONS>
     {%- for mod in doc_revision.modifications %}
@@ -60,4 +78,4 @@
  </DOC-REVISIONS>
  {%- endif %}
 </ADMIN-DATA>
-{%- endmacro -%}
+{%- endmacro %}

@@ -3,37 +3,47 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2022 MBition GmbH
 
+import pathlib
 from enum import IntEnum
 from itertools import chain
 from typing import Any
+from xml.etree import ElementTree
 
-from odxtools.utils import short_name_as_id
+import odxtools.uds as uds
 from odxtools import PhysicalConstantParameter
+from odxtools.admindata import (AdminData, CompanyDocInfo, DocRevision,
+                                Modification)
+from odxtools.audience import AdditionalAudience, Audience
+from odxtools.communicationparameter import CommunicationParameterRef
+from odxtools.companydata import (CompanyData, CompanySpecificInfo, RelatedDoc,
+                                  TeamMember, XDoc)
+from odxtools.comparam_subset import ComparamSubset
+from odxtools.compumethods import (CompuScale, IdenticalCompuMethod, Limit,
+                                   TexttableCompuMethod)
+from odxtools.database import Database
+from odxtools.dataobjectproperty import DataObjectProperty
+from odxtools.diagcodedtypes import StandardLengthType
+from odxtools.diagdatadictionaryspec import DiagDataDictionarySpec
+from odxtools.diaglayer import DiagLayer, DiagLayerContainer
+from odxtools.diaglayertype import DIAG_LAYER_TYPE
 from odxtools.envdata import EnvironmentData
 from odxtools.envdatadesc import EnvironmentDataDescription
-from odxtools.multiplexer import Multiplexer, MultiplexerSwitchKey, MultiplexerDefaultCase, MultiplexerCase
-from odxtools.table import Table, TableRow
-from odxtools.nameditemlist import NamedItemList
-from odxtools.database import Database
-from odxtools.companydata import XDoc, RelatedDoc, CompanySpecificInfo, TeamMember, CompanyData
-from odxtools.admindata import CompanyDocInfo, Modification, DocRevision, AdminData
-from odxtools.diaglayer import DiagLayer, DiagLayerContainer
-from odxtools.service import DiagService
-from odxtools.singleecujob import SingleEcuJob, ProgCode
-from odxtools.structures import Request, Response
-from odxtools.compumethods import IdenticalCompuMethod, TexttableCompuMethod, CompuScale, Limit
-from odxtools.dataobjectproperty import DataObjectProperty
-from odxtools.diagdatadictionaryspec import DiagDataDictionarySpec
-from odxtools.diagcodedtypes import StandardLengthType
-from odxtools.physicaltype import PhysicalType
-from odxtools.units import UnitSpec, Unit, UnitGroup, PhysicalDimension
-from odxtools.parameters import CodedConstParameter, ValueParameter, MatchingRequestParameter, NrcConstParameter
-from odxtools.communicationparameter import CommunicationParameterRef
-from odxtools.audience import AdditionalAudience, Audience
 from odxtools.functionalclass import FunctionalClass
-import odxtools.uds as uds
+from odxtools.multiplexer import (Multiplexer, MultiplexerCase,
+                                  MultiplexerDefaultCase, MultiplexerSwitchKey)
+from odxtools.nameditemlist import NamedItemList
+from odxtools.odxlink import OdxDocFragment, OdxLinkId, OdxLinkRef
 from odxtools.odxtypes import DataType
-from odxtools.odxlink import OdxLinkId, OdxLinkRef, OdxDocFragment
+from odxtools.parameters import (CodedConstParameter, MatchingRequestParameter,
+                                 NrcConstParameter, ValueParameter)
+from odxtools.physicaltype import PhysicalType
+from odxtools.service import DiagService
+from odxtools.singleecujob import ProgCode, SingleEcuJob
+from odxtools.structures import Request, Response
+from odxtools.table import Table, TableRow
+from odxtools.units import PhysicalDimension, Unit, UnitGroup, UnitSpec
+from odxtools.utils import short_name_as_id
+
 
 class SomersaultSID(IntEnum):
     """The Somersault-ECU specific service IDs.
@@ -56,9 +66,9 @@ dlc_short_name = "somersault"
 doc_frags = [ OdxDocFragment(dlc_short_name, "CONTAINER") ]
 
 # document fragments for communication parameters
-cp_dwcan_doc_frags = [ OdxDocFragment("ISO_11898_2_DWCAN", "COMPARAM-SPEC") ]
-cp_iso15765_2_doc_frags = [ OdxDocFragment("ISO_15765_2", "COMPARAM-SPEC") ]
-cp_iso15765_3_doc_frags = [ OdxDocFragment("ISO_15765_3", "COMPARAM-SPEC") ]
+cp_dwcan_doc_frags = [ OdxDocFragment("ISO_11898_2_DWCAN", "COMPARAM-SUBSET") ]
+cp_iso15765_2_doc_frags = [ OdxDocFragment("ISO_15765_2", "COMPARAM-SUBSET") ]
+cp_iso15765_3_doc_frags = [ OdxDocFragment("ISO_15765_3", "COMPARAM-SUBSET") ]
 
 ##################
 # Base variant of Somersault ECU
@@ -885,7 +895,7 @@ somersault_services = {
                         OdxLinkRef.from_id(somersault_additional_audiences["attentive_admirer"].odx_id),
                         OdxLinkRef.from_id(somersault_additional_audiences["anyone"].odx_id),
                     ],
-                    is_development=False)
+                    is_development_raw=False)
                 ),
 
     "set_operation_params":
@@ -924,7 +934,7 @@ somersault_services = {
                 ],
                 audience=Audience(
                     enabled_audience_refs=[OdxLinkRef.from_id(somersault_additional_audiences["attentive_admirer"].odx_id)],
-                    is_development=False)
+                    is_development_raw=False)
                 ),
 
     "backward_flips":
@@ -943,7 +953,7 @@ somersault_services = {
                 ],
                 audience=Audience(
                     enabled_audience_refs=[OdxLinkRef.from_id(somersault_additional_audiences["attentive_admirer"].odx_id)],
-                    is_development=False)
+                    is_development_raw=False)
                 ),
 
     "report_status":
@@ -959,8 +969,8 @@ somersault_services = {
                 ],
                 audience=Audience(
                     disabled_audience_refs=[OdxLinkRef.from_id(somersault_additional_audiences["attentive_admirer"].odx_id)],
-                    is_aftersales=False,
-                    is_aftermarket=False)
+                    is_aftersales_raw=False,
+                    is_aftermarket_raw=False)
                 ),
 
 }
@@ -1044,7 +1054,7 @@ somersault_communication_parameters = [
 
     # a response is mandatory
     CommunicationParameterRef(
-        id_ref=OdxLinkRef("ISO_15765_3.ISO_15765_3.CP_TesterPresentReqRsp", cp_iso15765_3_doc_frags),
+        id_ref=OdxLinkRef("ISO_15765_3.CP_TesterPresentReqRsp", cp_iso15765_3_doc_frags),
         value='Response expected'),
 
     # positive response to "tester present"
@@ -1099,7 +1109,7 @@ somersault_diag_data_dictionary_spec = DiagDataDictionarySpec(
 
 # diagnostics layer
 somersault_diaglayer = DiagLayer(
-    variant_type="BASE-VARIANT",
+    variant_type=DIAG_LAYER_TYPE.BASE_VARIANT,
     odx_id=OdxLinkId("somersault", doc_frags),
     short_name="somersault",
     long_name="Somersault base variant",
@@ -1120,7 +1130,7 @@ somersault_diaglayer = DiagLayer(
 
 # TODO: inheritance (without too much code duplication)
 somersault_lazy_diaglayer = DiagLayer(
-    variant_type="ECU-VARIANT",
+    variant_type=DIAG_LAYER_TYPE.ECU_VARIANT,
     odx_id=OdxLinkId("somersault_lazy", doc_frags),
     short_name="somersault_lazy",
     long_name="Somersault lazy ECU",
@@ -1136,7 +1146,6 @@ somersault_lazy_diaglayer = DiagLayer(
             ],
         )],
     communication_parameters=somersault_communication_parameters,
-    enable_candela_workarounds=False,
     )
 
 ##################
@@ -1146,7 +1155,7 @@ somersault_lazy_diaglayer = DiagLayer(
 
 # TODO: inheritance (without too much code duplication)
 somersault_assiduous_diaglayer = DiagLayer(
-    variant_type="ECU-VARIANT",
+    variant_type=DIAG_LAYER_TYPE.ECU_VARIANT,
     odx_id=OdxLinkId("somersault_assiduous", doc_frags),
     short_name="somersault_assiduous",
     long_name="Somersault assiduous ECU",
@@ -1159,7 +1168,6 @@ somersault_assiduous_diaglayer = DiagLayer(
             # this variant does everything which the base variant does
         )],
     communication_parameters=somersault_communication_parameters,
-    enable_candela_workarounds=False,
     )
 
 # the assiduous ECU also does headstands...
@@ -1267,10 +1275,22 @@ somersault_dlc = DiagLayerContainer(
     ecu_variants=[somersault_lazy_diaglayer, somersault_assiduous_diaglayer]
 )
 
+# read the communication parameters
+comparam_subsets = []
+odx_cs_dir = pathlib.Path(__file__).parent / "data"
+for odx_cs_filename in ("ISO_11898_2_DWCAN.odx-cs",
+                        "ISO_11898_3_DWFTCAN.odx-cs",
+                        "ISO_15765_2.odx-cs",
+                        "ISO_15765_3_CPSS.odx-cs"):
+    odx_cs_root = ElementTree.parse(odx_cs_dir/odx_cs_filename).getroot()
+    subset = odx_cs_root.find("COMPARAM-SUBSET")
+    if subset is not None:
+        comparam_subsets.append(ComparamSubset.from_et(subset))
+
 # create a database object
 database = Database()
-database.diag_layer_containers = NamedItemList(short_name_as_id,
-                                               [somersault_dlc])
+database._diag_layer_containers = NamedItemList(short_name_as_id, [somersault_dlc])
+database._comparam_subsets = NamedItemList(short_name_as_id, comparam_subsets)
 
 # Create ID mapping and resolve references
 database.finalize_init()

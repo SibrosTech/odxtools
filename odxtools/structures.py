@@ -2,7 +2,7 @@
 # Copyright (c) 2022 MBition GmbH
 
 import math
-from typing import TYPE_CHECKING, Any, Optional, List, Dict, Iterable, ByteString, OrderedDict, Tuple, Union
+from typing import TYPE_CHECKING, Optional, List, Dict, Iterable, ByteString, OrderedDict, Tuple, Union
 import warnings
 
 from .utils import short_name_as_id
@@ -14,10 +14,17 @@ from .encodestate import EncodeState
 from .exceptions import DecodeError, EncodeError, OdxWarning
 from .globals import logger
 from .nameditemlist import NamedItemList
-from .parameters import Parameter, ParameterWithDOP, read_parameter_from_odx
-from .parameters import CodedConstParameter, MatchingRequestParameter, ValueParameter
-from .utils import read_description_from_odx
+from .parameters import (
+    create_any_parameter_from_et,
+    Parameter,
+    ParameterWithDOP,
+    CodedConstParameter,
+    MatchingRequestParameter,
+    ValueParameter,
+)
+from .utils import create_description_from_et
 from .odxlink import OdxLinkId, OdxDocFragment, OdxLinkDatabase
+from .specialdata import create_sdgs_from_et
 
 if TYPE_CHECKING:
     from .diaglayer import DiagLayer
@@ -27,14 +34,20 @@ ParameterDict = Dict[str, Union[Parameter, "ParameterDict"]]
 
 class BasicStructure(DopBase):
     def __init__(self,
+                 *,
                  odx_id,
                  short_name,
                  parameters: Iterable[Union[Parameter, "EndOfPduField"]],
                  long_name=None,
                  byte_size=None,
-                 description=None):
-        super().__init__(odx_id, short_name, long_name=long_name, description=description)
-        self.parameters : NamedItemList[Union[Parameter, "EndOfPduField"]] = NamedItemList(short_name_as_id, parameters)
+                 description=None,
+                 sdgs=[]):
+        super().__init__(odx_id=odx_id,
+                         short_name=short_name,
+                         long_name=long_name,
+                         description=description,
+                         sdgs=sdgs)
+        self.parameters: NamedItemList[Union[Parameter, "EndOfPduField"]] = NamedItemList(short_name_as_id, parameters)
         self._byte_size = byte_size
 
     @property
@@ -139,8 +152,7 @@ class BasicStructure(DopBase):
         for param in self.parameters:
             if param == self.parameters[-1]:
                 # The last parameter is at the end of the PDU if the structure itself is at the end of the PDU
-                encode_state = encode_state._replace(
-                    is_end_of_pdu=is_end_of_pdu)
+                encode_state = encode_state._replace(is_end_of_pdu=is_end_of_pdu)
 
             implicit_length_encoding = isinstance(param, LengthKeyParameter) and param.short_name not in param_values
             if implicit_length_encoding:
@@ -181,7 +193,7 @@ class BasicStructure(DopBase):
     def _validate_coded_rpc(
             self,
             coded_rpc: bytearray):
-        
+
         if self._byte_size is not None:
             # We definitely broke something if we didn't respect the explicit byte_size
             assert len(coded_rpc) == self._byte_size, self._get_encode_error_str('was', coded_rpc, self._byte_size * 8)
@@ -272,8 +284,11 @@ class BasicStructure(DopBase):
         param_values, next_byte_position = self.convert_bytes_to_physical(
             decode_state)
         if len(message) != next_byte_position:
-            raise DecodeError(
-                f"The message {message.hex()} is longer than could be parsed. Expected {next_byte_position} but got {len(message)}.")
+            warnings.warn(
+                f"The message {message.hex()} is longer than could be parsed."
+                f" Expected {next_byte_position} but got {len(message)}.",
+                DecodeError
+            )
         return param_values
 
     def parameter_dict(self) -> ParameterDict:
@@ -298,16 +313,29 @@ class BasicStructure(DopBase):
         })
         return param_dict
 
-    def _resolve_references(self,
+    def _build_odxlinks(self):
+        result = super()._build_odxlinks()
+
+        for param in self.parameters:
+            result.update(param._build_odxlinks())
+
+        return result
+
+    def _resolve_references(self, # type: ignore[override]
                             parent_dl: "DiagLayer",
-                            odxlinks: OdxLinkDatabase):
+                            odxlinks: OdxLinkDatabase) \
+            -> None:
         """Recursively resolve any references (odxlinks or sn-refs)
         """
+        super()._resolve_references(odxlinks)
+
         for p in self.parameters:
             if isinstance(p, ParameterWithDOP):
                 p.resolve_references(parent_dl, odxlinks)
-            if isinstance(p, TableKeyParameter):
+            elif isinstance(p, TableKeyParameter):
                 p.resolve_references(parent_dl, odxlinks)
+            else:
+                p._resolve_references(odxlinks)
 
     def __message_format_lines(self, allow_unknown_lengths: bool = False) \
             -> List[str]:
@@ -334,63 +362,63 @@ class BasicStructure(DopBase):
             else:
                 params.append(p)
 
-        i = 0
-        byte = 0
+        param_idx = 0
+        byte_idx = 0
         # needs to be one larger than the maximum digit length of a byte number
         indent_for_byte_numbering = 5 * " "
         formatted_lines = [indent_for_byte_numbering +
-                           "".join(f"   {7-bit}  " for bit in range(8))]
+                           "".join(f"   {7-bit_idx}  " for bit_idx in range(8))]
 
-        breakpoint = 0  # absolute bit position where the next parameter starts
+        stop_bit = 0  # absolute bit position where the next parameter starts
 
         divide_string = indent_for_byte_numbering + 8 * "+-----" + "+"
 
         error = False
         next_line = ""
-        while i <= len(params) and not error:  # For each byte
-            if 8 * byte == breakpoint and i == len(params):
+        while param_idx <= len(params) and not error:  # For each byte
+            if 8 * byte_idx == stop_bit and param_idx == len(params):
                 # If we have formatted the last parameter, we're done.
                 break
 
             formatted_lines.append(f"{divide_string}")
-            if breakpoint // 8 - byte > 5:
-                curr_param = params[i-1].short_name
+            if stop_bit // 8 - byte_idx > 5:
+                curr_param = params[param_idx-1].short_name
                 formatted_lines.append(
-                    indent_for_byte_numbering + f"  ... {breakpoint // 8 - byte} bytes belonging to {curr_param} ... ")
-                byte += breakpoint // 8 - byte
+                    indent_for_byte_numbering + f"  ... {stop_bit // 8 - byte_idx} bytes belonging to {curr_param} ... ")
+                byte_idx += stop_bit // 8 - byte_idx
                 continue
 
-            next_line = f"{(len(indent_for_byte_numbering) - 1 - len(str(byte))) * ' '}{byte} "
+            next_line = f"{(len(indent_for_byte_numbering) - 1 - len(str(byte_idx))) * ' '}{byte_idx} "
 
-            for bit in range(8):
-                assert 8 * byte + bit <= breakpoint
+            for bit_idx in range(8):
+                assert 8 * byte_idx + bit_idx <= stop_bit
 
-                if 8 * byte + bit == breakpoint:
+                if 8 * byte_idx + bit_idx == stop_bit:
                     # END-OF-PDU fields do not exhibit a fixed bit
                     # length, so they need special treatment here
                     dct = None
-                    if hasattr(params[i], 'dop'):
-                        dop = params[i].dop # type: ignore
+                    if hasattr(params[param_idx], 'dop'):
+                        dop = params[param_idx].dop # type: ignore
                         if hasattr(dop, 'diag_coded_type'):
                             dct = dop.diag_coded_type
 
                     if dct is not None and dct.dct_type == 'MIN-MAX-LENGTH-TYPE':
-                        name = params[i].short_name + " ("
+                        name = params[param_idx].short_name + " ("
                         if dct.termination == "END-OF-PDU":
                             name += "End of PDU, "
                         name += f"{dct.min_length}..{dct.max_length} bytes"
                         name += ")"
                         next_line += "| " + name
 
-                        i += 1
+                        param_idx += 1
 
                         # adding 8 is is a bit hacky here, but hey, it
                         # works ...
-                        breakpoint += 8
+                        stop_bit += 8
 
                         break
 
-                    elif not params[i].bit_length and not allow_unknown_lengths:
+                    elif not params[param_idx].bit_length and not allow_unknown_lengths:
                         # The bit length is not set for the current
                         # parameter, i.e. it was either not specified
                         # or the parameter is of variable length and
@@ -399,36 +427,37 @@ class BasicStructure(DopBase):
                         error = True
                         break
                     else:
-                        breakpoint += params[i].bit_length or (
+                        stop_bit += params[param_idx].bit_length or (
                             allow_unknown_lengths and 8)
-                        name = params[i].short_name + \
-                            f" ({params[i].bit_length or 'Unknown'} bits)"
+                        name = params[param_idx].short_name + \
+                            f" ({params[param_idx].bit_length or 'Unknown'} bits)"
                         next_line += "| " + name
 
-                    i += 1
+                    param_idx += 1
 
-                    if byte == breakpoint // 8:
-                        char_pos = bit * 6 + 2 + len(name)
-                        width_of_line = (breakpoint % 8) * 6
+                    if byte_idx == stop_bit // 8:
+                        char_pos = bit_idx * 6 + 2 + len(name)
+                        width_of_line = (stop_bit % 8) * 6
                         if char_pos < width_of_line:
                             next_line += " " * \
                                 (width_of_line - char_pos) + "|"
                         # start next line (belongs to same byte)
                         formatted_lines.append(next_line)
-                        # fill next line with white spaces upto the bit where next parameter starts
+                        # fill next line with white spaces up to the
+                        # bit where next parameter starts
                         next_line = indent_for_byte_numbering + \
-                            (bit + 1) * 6 * " "
+                            (bit_idx + 1) * 6 * " "
                     else:
-                        char_pos = 2 + bit * 6 + len(name)
+                        char_pos = 2 + bit_idx * 6 + len(name)
                         width_of_line = 8 * 6
                         if char_pos < width_of_line:
                             next_line += " " * \
                                 (width_of_line - char_pos) + "|"
                         break
                 else:
-                    if bit == 0:
+                    if bit_idx == 0:
                         next_line += "|" + 5 * " "
-                    elif bit == 7:
+                    elif bit_idx == 7:
                         next_line += 6 * " " + "|"
                     else:
                         next_line += 6 * " "
@@ -436,7 +465,7 @@ class BasicStructure(DopBase):
             formatted_lines.append(next_line)
             next_line = ""
 
-            byte += 1
+            byte_idx += 1
 
         if not error:
             formatted_lines.append(divide_string)
@@ -462,13 +491,24 @@ class BasicStructure(DopBase):
 
 
 class Structure(BasicStructure):
-    def __init__(self, odx_id, short_name, parameters, long_name=None, byte_size=None, description=None):
-        super().__init__(odx_id, short_name, parameters,
-                         long_name=long_name, description=description)
+    def __init__(self,
+                 *,
+                 odx_id,
+                 short_name,
+                 parameters,
+                 long_name=None,
+                 byte_size=None,
+                 description=None,
+                 sdgs=[]):
+        super().__init__(odx_id=odx_id,
+                         short_name=short_name,
+                         parameters=parameters,
+                         long_name=long_name,
+                         byte_size=byte_size,
+                         description=description,
+                         sdgs=sdgs)
 
         self.parameters = parameters
-        self.basic_structure = BasicStructure(odx_id, short_name, parameters,
-                                              long_name=long_name, byte_size=byte_size, description=description)
 
     def __repr__(self) -> str:
         return f"Structure('{self.short_name}', byte_size={self._byte_size})"
@@ -484,9 +524,20 @@ class Structure(BasicStructure):
 
 
 class Request(BasicStructure):
-    def __init__(self, odx_id, short_name, parameters, long_name=None, description=None):
-        super().__init__(odx_id, short_name, parameters,
-                         long_name=long_name, description=description)
+    def __init__(self,
+                 *,
+                 odx_id,
+                 short_name,
+                 parameters,
+                 long_name=None,
+                 description=None,
+                 sdgs=[]):
+        super().__init__(odx_id=odx_id,
+                         short_name=short_name,
+                         parameters=parameters,
+                         long_name=long_name,
+                         description=description,
+                         sdgs=sdgs)
 
     def __repr__(self) -> str:
         return f"Request('{self.short_name}')"
@@ -496,9 +547,21 @@ class Request(BasicStructure):
 
 
 class Response(BasicStructure):
-    def __init__(self, odx_id, short_name, parameters, long_name=None, response_type=None, description=None):
-        super().__init__(odx_id, short_name, parameters,
-                         long_name=long_name, description=description)
+    def __init__(self,
+                 *,
+                 odx_id,
+                 short_name,
+                 parameters,
+                 long_name=None,
+                 response_type=None,
+                 description=None,
+                 sdgs=[]):
+        super().__init__(odx_id=odx_id,
+                         short_name=short_name,
+                         parameters=parameters,
+                         long_name=long_name,
+                         description=description,
+                         sdgs=sdgs)
         self.response_type = "POS-RESPONSE" if response_type == "POS-RESPONSE" else "NEG-RESPONSE"
 
     def encode(self, coded_request: Optional[ByteString] = None, **params) -> ByteString:
@@ -524,42 +587,49 @@ class Response(BasicStructure):
         return f"Response('{self.short_name}')"
 
 
-def read_structure_from_odx(et_element, doc_frags: List[OdxDocFragment]) -> Union[Structure, Request, Response, None]:
+def create_any_structure_from_et(et_element,
+                                doc_frags: List[OdxDocFragment]) \
+        -> Union[Structure, Request, Response, None]:
+
     odx_id = OdxLinkId.from_et(et_element, doc_frags)
-    short_name = et_element.find("SHORT-NAME").text
+    short_name = et_element.findtext("SHORT-NAME")
     long_name = et_element.findtext("LONG-NAME")
-    description = read_description_from_odx(et_element.find("DESC"))
-    parameters = [read_parameter_from_odx(et_parameter, doc_frags)
+    description = create_description_from_et(et_element.find("DESC"))
+    parameters = [create_any_parameter_from_et(et_parameter, doc_frags)
                   for et_parameter in et_element.iterfind("PARAMS/PARAM")]
+    sdgs = create_sdgs_from_et(et_element.find("SDGS"), doc_frags)
 
     res: Union[Structure, Request, Response, None]
     if et_element.tag == "REQUEST":
         res = Request(
-            odx_id,
-            short_name,
+            odx_id=odx_id,
+            short_name=short_name,
             parameters=parameters,
             long_name=long_name,
-            description=description
+            description=description,
+            sdgs=sdgs,
         )
     elif et_element.tag in ["POS-RESPONSE", "NEG-RESPONSE", "GLOBAL-NEG-RESPONSE"]:
         res = Response(
-            odx_id,
-            short_name,
+            odx_id=odx_id,
+            short_name=short_name,
             response_type=et_element.tag,
             parameters=parameters,
             long_name=long_name,
-            description=description
+            description=description,
+            sdgs=sdgs,
         )
     elif et_element.tag == "STRUCTURE":
-        byte_size = int(et_element.find(
-            "BYTE-SIZE").text) if et_element.find("BYTE-SIZE") is not None else None
+        byte_size_text = et_element.findtext("BYTE-SIZE")
+        byte_size = int(byte_size_text) if byte_size_text is not None else None
         res = Structure(
-            odx_id,
-            short_name,
+            odx_id=odx_id,
+            short_name=short_name,
             parameters=parameters,
             byte_size=byte_size,
             long_name=long_name,
-            description=description
+            description=description,
+            sdgs=sdgs,
         )
     else:
         res = None

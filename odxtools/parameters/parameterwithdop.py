@@ -16,13 +16,16 @@ from .parameterbase import Parameter
 
 class ParameterWithDOP(Parameter):
     def __init__(self,
+                 *,
                  short_name: str,
                  parameter_type: str,
                  dop=None,
                  dop_ref: Optional[OdxLinkRef] = None,
                  dop_snref: Optional[str] = None,
                  **kwargs):
-        super().__init__(short_name, parameter_type, **kwargs)
+        super().__init__(short_name=short_name,
+                         parameter_type=parameter_type,
+                         **kwargs)
         self.dop_ref = dop_ref
         self.dop_snref = dop_snref
 
@@ -45,6 +48,8 @@ class ParameterWithDOP(Parameter):
             self.dop_snref = dop.short_name
 
     def resolve_references(self, parent_dl, odxlinks: OdxLinkDatabase):
+        super()._resolve_references(odxlinks)
+
         dop = self.dop
         if self.dop_snref:
             dop = parent_dl.data_object_properties.get(self.dop_snref)

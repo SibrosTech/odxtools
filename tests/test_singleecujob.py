@@ -3,25 +3,30 @@
 
 import inspect
 import os
-from typing import NamedTuple, cast
 import unittest
+from typing import NamedTuple, cast
 from xml.etree import ElementTree
+
 import jinja2
 
 import odxtools
-from odxtools.utils import short_name_as_id
 from odxtools.audience import AdditionalAudience, Audience
-from odxtools.compumethods import CompuScale, Limit, LinearCompuMethod, TexttableCompuMethod
+from odxtools.compumethods import (CompuScale, Limit, LinearCompuMethod,
+                                   TexttableCompuMethod)
 from odxtools.dataobjectproperty import DataObjectProperty
 from odxtools.diagcodedtypes import StandardLengthType
 from odxtools.diaglayer import DiagLayer
+from odxtools.diaglayertype import DIAG_LAYER_TYPE
 from odxtools.functionalclass import FunctionalClass
 from odxtools.nameditemlist import NamedItemList
+from odxtools.odxlink import (OdxDocFragment, OdxLinkDatabase, OdxLinkId,
+                              OdxLinkRef)
 from odxtools.odxtypes import DataType
 from odxtools.physicaltype import PhysicalType
-from odxtools.singleecujob import read_single_ecu_job_from_odx, SingleEcuJob, ProgCode, InputParam, OutputParam, NegOutputParam
-from odxtools.write_pdx_file import jinja2_odxraise_helper
-from odxtools.odxlink import OdxLinkId, OdxLinkRef, OdxLinkDatabase, OdxDocFragment
+from odxtools.singleecujob import (InputParam, NegOutputParam, OutputParam,
+                                   ProgCode, SingleEcuJob)
+from odxtools.utils import short_name_as_id
+from odxtools.write_pdx_file import make_xml_attrib, make_bool_xml_attrib, jinja2_odxraise_helper
 
 doc_frags = [ OdxDocFragment("UnitTest", "WinneThePoh") ]
 
@@ -55,8 +60,8 @@ class TestSingleEcuJob(unittest.TestCase):
             inputDOP=DataObjectProperty(
                 odx_id=OdxLinkId("ID.inputDOP", doc_frags),
                 short_name="inputDOP",
-                diag_coded_type=StandardLengthType(
-                    DataType.A_INT32, bit_length=1),
+                diag_coded_type=StandardLengthType(base_data_type=DataType.A_INT32,
+                                                   bit_length=1),
                 physical_type=PhysicalType(DataType.A_UNICODE2STRING),
                 compu_method=TexttableCompuMethod(
                     internal_to_phys=[
@@ -72,21 +77,25 @@ class TestSingleEcuJob(unittest.TestCase):
             outputDOP=DataObjectProperty(
                 odx_id=OdxLinkId("ID.outputDOP", doc_frags),
                 short_name="outputDOP",
-                diag_coded_type=StandardLengthType(
-                    DataType.A_INT32, bit_length=1),
+                diag_coded_type=StandardLengthType(base_data_type=DataType.A_INT32,
+                                                   bit_length=1),
                 physical_type=PhysicalType(DataType.A_UNICODE2STRING),
-                compu_method=LinearCompuMethod(1, -1,
-                                               internal_type=DataType.A_UINT32, physical_type=DataType.A_UINT32)
+                compu_method=LinearCompuMethod(offset=1,
+                                               factor=-1,
+                                               internal_type=DataType.A_UINT32,
+                                               physical_type=DataType.A_UINT32)
             ),
 
             negOutputDOP=DataObjectProperty(
                 odx_id=OdxLinkId("ID.negOutputDOP", doc_frags),
                 short_name="negOutputDOP",
-                diag_coded_type=StandardLengthType(
-                    DataType.A_INT32, bit_length=1),
+                diag_coded_type=StandardLengthType(base_data_type=DataType.A_INT32,
+                                                   bit_length=1),
                 physical_type=PhysicalType(DataType.A_UNICODE2STRING),
-                compu_method=LinearCompuMethod(1, -1,
-                                               internal_type=DataType.A_UINT32, physical_type=DataType.A_UINT32)
+                compu_method=LinearCompuMethod(offset=1,
+                                               factor=-1,
+                                               internal_type=DataType.A_UINT32,
+                                               physical_type=DataType.A_UINT32)
             )
         )
 
@@ -120,7 +129,8 @@ class TestSingleEcuJob(unittest.TestCase):
             short_name="JumpStart",
             functional_class_refs=[OdxLinkRef.from_id(self.context.extensiveTask.odx_id)],
             audience=Audience(
-                enabled_audience_refs=[OdxLinkRef.from_id(self.context.specialAudience.odx_id)]
+                enabled_audience_refs=[OdxLinkRef.from_id(self.context.specialAudience.odx_id)],
+                is_manufacturing_raw=False,
             ),
             prog_codes=[
                 ProgCode(
@@ -145,7 +155,7 @@ class TestSingleEcuJob(unittest.TestCase):
                 <FUNCT-CLASS-REFS>
                     <FUNCT-CLASS-REF ID-REF="{self.singleecujob_object.functional_class_refs[0].ref_id}"/>
                 </FUNCT-CLASS-REFS>
-                <AUDIENCE>
+                <AUDIENCE IS-MANUFACTURING="false">
                     <ENABLED-AUDIENCE-REFS>
                         <ENABLED-AUDIENCE-REF ID-REF="{cast(Audience, self.singleecujob_object.audience).enabled_audience_refs[0].ref_id}"/>
                     </ENABLED-AUDIENCE-REFS>
@@ -191,7 +201,7 @@ class TestSingleEcuJob(unittest.TestCase):
         expected = self.singleecujob_object
         sample_single_ecu_job_odx = self.singleecujob_odx
         et_element = ElementTree.fromstring(sample_single_ecu_job_odx)
-        sej = read_single_ecu_job_from_odx(et_element, doc_frags=doc_frags)
+        sej = SingleEcuJob.from_et(et_element, doc_frags)
         self.assertEqual(expected.prog_codes, sej.prog_codes)
         self.assertEqual(expected.output_params, sej.output_params)
         self.assertEqual(expected.neg_output_params,
@@ -203,17 +213,18 @@ class TestSingleEcuJob(unittest.TestCase):
         # Setup jinja environment
         __module_filename = inspect.getsourcefile(odxtools)
         assert isinstance(__module_filename, str)
-        stub_dir = os.path.sep.join([os.path.dirname(__module_filename),
-                                     "pdx_stub"])
+        templates_dir = os.path.sep.join([os.path.dirname(__module_filename),
+                                     "templates"])
         jinja_env = jinja2.Environment(
-            loader=jinja2.FileSystemLoader(stub_dir))
+            loader=jinja2.FileSystemLoader(templates_dir))
         jinja_env.globals['odxraise'] = jinja2_odxraise_helper
-        jinja_env.filters["odxtools_collapse_xml_attribute"] = (
-            lambda x: " " + x.strip() if x.strip() else "")
+        jinja_env.globals['make_xml_attrib'] = make_xml_attrib
+        jinja_env.globals['make_bool_xml_attrib'] = make_bool_xml_attrib
+        jinja_env.globals['hasattr'] = hasattr
 
         # Small template
         template = jinja_env.from_string("""
-            {%- import('macros/printSingleEcuJob.tpl') as psej %}
+            {%- import('macros/printSingleEcuJob.xml.jinja2') as psej %}
             {{psej.printSingleEcuJob(singleecujob)}}
         """)
 
@@ -228,7 +239,7 @@ class TestSingleEcuJob(unittest.TestCase):
 
         # Assert equality of objects
         # This tests the idempotency of read-write
-        sej = read_single_ecu_job_from_odx(ElementTree.fromstring(rawodx), doc_frags=doc_frags)
+        sej = SingleEcuJob.from_et(ElementTree.fromstring(rawodx), doc_frags)
         self.assertEqual(self.singleecujob_object, sej)
 
     def test_default_lists(self):
@@ -251,7 +262,7 @@ class TestSingleEcuJob(unittest.TestCase):
         self.assertEqual(sej.prog_codes[0].library_refs, [])
 
     def test_resolve_references(self):
-        dl = DiagLayer(variant_type="BASE-VARIANT",
+        dl = DiagLayer(variant_type=DIAG_LAYER_TYPE.BASE_VARIANT,
                        odx_id=OdxLinkId("ID.bv", doc_frags),
                        short_name="bv",
                        single_ecu_jobs=[self.singleecujob_object])

@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2022 MBition GmbH
 
-from typing import Dict, Literal, Optional, Any
+from typing import Dict, Literal, Optional, Any, Union
 from xml.etree import ElementTree
 
 from .odxlink import OdxDocFragment
 
-def read_description_from_odx(et_element: Optional[ElementTree.Element]) \
+def create_description_from_et(et_element: Optional[ElementTree.Element]) \
  -> Optional[str]:
     """Read a description tag.
 

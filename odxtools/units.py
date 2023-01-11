@@ -6,11 +6,11 @@ from typing import Dict, List, Any, Literal, Optional, Union
 
 from .utils import short_name_as_id
 from .nameditemlist import NamedItemList
-from .utils import read_description_from_odx
+from .utils import create_description_from_et
 from .odxlink import OdxLinkRef, OdxLinkId, OdxLinkDatabase, OdxDocFragment
+from .specialdata import SpecialDataGroup, create_sdgs_from_et
 
 UnitGroupCategory = Literal["COUNTRY", "EQUIV-UNITS"]
-
 
 @dataclass
 class PhysicalDimension:
@@ -57,6 +57,45 @@ class PhysicalDimension:
     molar_amount_exp: int = 0
     luminous_intensity_exp: int = 0
 
+    @staticmethod
+    def from_et(et_element, doc_frags: List[OdxDocFragment]) \
+            -> "PhysicalDimension":
+        odx_id = OdxLinkId.from_et(et_element, doc_frags)
+        assert odx_id is not None
+        oid = et_element.get("OID")
+        short_name = et_element.findtext("SHORT-NAME")
+        long_name = et_element.findtext("LONG-NAME")
+        description = create_description_from_et(et_element.find("DESC"))
+
+        def read_optional_int(element, name):
+            if element.findtext(name):
+                return int(element.findtext(name))
+            else:
+                return 0
+
+        length_exp = read_optional_int(et_element, "LENGTH-EXP")
+        mass_exp = read_optional_int(et_element, "MASS-EXP")
+        time_exp = read_optional_int(et_element, "TIME-EXP")
+        current_exp = read_optional_int(et_element, "CURRENT-EXP")
+        temperature_exp = read_optional_int(et_element, "TEMPERATURE-EXP")
+        molar_amount_exp = read_optional_int(et_element, "MOLAR-AMOUNT-EXP")
+        luminous_intensity_exp = read_optional_int(et_element,
+                                                   "LUMINOUS-INTENSITY-EXP")
+
+        return PhysicalDimension(
+            odx_id=odx_id,
+            short_name=short_name,
+            oid=oid,
+            long_name=long_name,
+            description=description,
+            length_exp=length_exp,
+            mass_exp=mass_exp,
+            time_exp=time_exp,
+            current_exp=current_exp,
+            temperature_exp=temperature_exp,
+            molar_amount_exp=molar_amount_exp,
+            luminous_intensity_exp=luminous_intensity_exp
+        )
 
 @dataclass
 class Unit:
@@ -112,11 +151,37 @@ class Unit:
     def __post_init__(self):
         self._physical_dimension = None
 
-        if self.factor_si_to_unit is not None or self.offset_si_to_unit is not None or self.physical_dimension_ref is not None:
-            assert self.factor_si_to_unit is not None and self.offset_si_to_unit is not None and self.physical_dimension_ref is not None, (
-                f"Error 54: If one of factor_si_to_unit, offset_si_to_unit and physical_dimension_ref is defined,"
-                f" all of them must be defined: {self.factor_si_to_unit} and {self.offset_si_to_unit} and {self.physical_dimension_ref}"
-            )
+    @staticmethod
+    def from_et(et_element, doc_frags: List[OdxDocFragment]) \
+            -> "Unit":
+        odx_id = OdxLinkId.from_et(et_element, doc_frags)
+        assert odx_id is not None
+        oid = et_element.get("OID")
+        short_name = et_element.findtext("SHORT-NAME")
+        long_name = et_element.findtext("LONG-NAME")
+        description = create_description_from_et(et_element.find("DESC"))
+        display_name = et_element.findtext("DISPLAY-NAME")
+
+        def read_optional_float(element, name):
+            if element.findtext(name):
+                return float(element.findtext(name))
+            else:
+                return None
+        factor_si_to_unit = read_optional_float(et_element, "FACTOR-SI-TO-UNIT")
+        offset_si_to_unit = read_optional_float(et_element, "OFFSET-SI-TO-UNIT")
+        physical_dimension_ref = OdxLinkRef.from_et(et_element.find("PHYSICAL-DIMENSION-REF"), doc_frags)
+
+        return Unit(
+            odx_id=odx_id,
+            short_name=short_name,
+            display_name=display_name,
+            oid=oid,
+            long_name=long_name,
+            description=description,
+            factor_si_to_unit=factor_si_to_unit,
+            offset_si_to_unit=offset_si_to_unit,
+            physical_dimension_ref=physical_dimension_ref,
+        )
 
     @property
     def physical_dimension(self) -> PhysicalDimension:
@@ -148,6 +213,32 @@ class UnitGroup:
     def __post_init__(self):
         self._units = NamedItemList[Unit](short_name_as_id)
 
+    @staticmethod
+    def from_et(et_element, doc_frags: List[OdxDocFragment]) \
+            -> "UnitGroup":
+        oid = et_element.get("OID")
+        short_name = et_element.findtext("SHORT-NAME")
+        long_name = et_element.findtext("LONG-NAME")
+        description = create_description_from_et(et_element.find("DESC"))
+        category = et_element.findtext("CATEGORY")
+        assert category in [
+            "COUNTRY", "EQUIV-UNITS"], f'A UNIT-GROUP-CATEGORY must be "COUNTRY" or "EQUIV-UNITS". It was {category}.'
+        unit_refs = []
+
+        for el in et_element.iterfind("UNIT-REFS/UNIT-REF"):
+            ref = OdxLinkRef.from_et(el, doc_frags)
+            assert isinstance(ref, OdxLinkRef)
+            unit_refs.append(ref)
+
+        return UnitGroup(
+            short_name=short_name,
+            category=category,
+            unit_refs=unit_refs,
+            oid=oid,
+            long_name=long_name,
+            description=description
+        )
+
     def _resolve_references(self, odxlinks: OdxLinkDatabase):
         self._units = NamedItemList[Unit](
             short_name_as_id,
@@ -177,11 +268,30 @@ class UnitSpec:
         default_factory=list)  # type: ignore
     physical_dimensions: Union[NamedItemList[PhysicalDimension],
                                List[PhysicalDimension]] = field(default_factory=list)  # type: ignore
+    sdgs: List[SpecialDataGroup] = field(default_factory=list)
 
     def __post_init__(self):
         self.unit_groups = NamedItemList(short_name_as_id, self.unit_groups)
         self.units = NamedItemList(short_name_as_id, self.units)
         self.physical_dimensions = NamedItemList(short_name_as_id, self.physical_dimensions)
+
+    @staticmethod
+    def from_et(et_element, doc_frags: List[OdxDocFragment]):
+
+        unit_groups = [UnitGroup.from_et(el, doc_frags)
+                       for el in et_element.iterfind("UNIT-GROUPS/UNIT-GROUP")]
+        units = [Unit.from_et(el, doc_frags)
+                 for el in et_element.iterfind("UNITS/UNIT")]
+        physical_dimensions = [PhysicalDimension.from_et(el, doc_frags)
+                               for el in et_element.iterfind("PHYSICAL-DIMENSIONS/PHYSICAL-DIMENSION")]
+        sdgs = create_sdgs_from_et(et_element.find("SDGS"), doc_frags)
+
+        return UnitSpec(
+            unit_groups=unit_groups,
+            units=units,
+            physical_dimensions=physical_dimensions,
+            sdgs=sdgs,
+        )
 
     def _build_odxlinks(self) -> Dict[OdxLinkId, Any]:
         odxlinks = {}
@@ -191,6 +301,10 @@ class UnitSpec:
         odxlinks.update({
             dim.odx_id: dim for dim in self.physical_dimensions
         })
+
+        for sdg in self.sdgs:
+            odxlinks.update(sdg._build_odxlinks())
+
         return odxlinks
 
     def _resolve_references(self, odxlinks: OdxLinkDatabase):
@@ -198,113 +312,5 @@ class UnitSpec:
             unit._resolve_references(odxlinks)
         for group in self.unit_groups:
             group._resolve_references(odxlinks)
-
-
-def read_unit_from_odx(et_element, doc_frags: List[OdxDocFragment]):
-    odx_id = OdxLinkId.from_et(et_element, doc_frags)
-    assert odx_id is not None
-    oid = et_element.get("OID")
-    short_name = et_element.find("SHORT-NAME").text
-    long_name = et_element.findtext("LONG-NAME")
-    description = read_description_from_odx(et_element.find("DESC"))
-    display_name = et_element.find("DISPLAY-NAME").text
-
-    def read_optional_float(element, name):
-        if element.findtext(name):
-            return float(element.findtext(name))
-        else:
-            return None
-    factor_si_to_unit = read_optional_float(et_element, "FACTOR-SI-TO-UNIT")
-    offset_si_to_unit = read_optional_float(et_element, "OFFSET-SI-TO-UNIT")
-    physical_dimension_ref = OdxLinkRef.from_et(et_element.find("PHYSICAL-DIMENSION-REF"), doc_frags)
-
-    return Unit(
-        odx_id=odx_id,
-        short_name=short_name,
-        display_name=display_name,
-        oid=oid,
-        long_name=long_name,
-        description=description,
-        factor_si_to_unit=factor_si_to_unit,
-        offset_si_to_unit=offset_si_to_unit,
-        physical_dimension_ref=physical_dimension_ref
-    )
-
-
-def read_physical_dimension_from_odx(et_element, doc_frags: List[OdxDocFragment]):
-    odx_id = OdxLinkId.from_et(et_element, doc_frags)
-    assert odx_id is not None
-    oid = et_element.get("OID")
-    short_name = et_element.find("SHORT-NAME").text
-    long_name = et_element.findtext("LONG-NAME")
-    description = read_description_from_odx(et_element.find("DESC"))
-
-    def read_optional_int(element, name):
-        if element.findtext(name):
-            return int(element.findtext(name))
-        else:
-            return 0
-
-    length_exp = read_optional_int(et_element, "LENGTH-EXP")
-    mass_exp = read_optional_int(et_element, "MASS-EXP")
-    time_exp = read_optional_int(et_element, "TIME-EXP")
-    current_exp = read_optional_int(et_element, "CURRENT-EXP")
-    temperature_exp = read_optional_int(et_element, "TEMPERATURE-EXP")
-    molar_amount_exp = read_optional_int(et_element, "MOLAR-AMOUNT-EXP")
-    luminous_intensity_exp = read_optional_int(et_element,
-                                               "LUMINOUS-INTENSITY-EXP")
-
-    return PhysicalDimension(
-        odx_id=odx_id,
-        short_name=short_name,
-        oid=oid,
-        long_name=long_name,
-        description=description,
-        length_exp=length_exp,
-        mass_exp=mass_exp,
-        time_exp=time_exp,
-        current_exp=current_exp,
-        temperature_exp=temperature_exp,
-        molar_amount_exp=molar_amount_exp,
-        luminous_intensity_exp=luminous_intensity_exp
-    )
-
-
-def read_unit_group_from_odx(et_element, doc_frags: List[OdxDocFragment]):
-    oid = et_element.get("OID")
-    short_name = et_element.find("SHORT-NAME").text
-    long_name = et_element.findtext("LONG-NAME")
-    description = read_description_from_odx(et_element.find("DESC"))
-    category = et_element.findtext("CATEGORY")
-    assert category in [
-        "COUNTRY", "EQUIV-UNITS"], f'A UNIT-GROUP-CATEGORY must be "COUNTRY" or "EQUIV-UNITS". It was {category}.'
-    unit_refs = []
-
-    for el in et_element.iterfind("UNIT-REFS/UNIT-REF"):
-        ref = OdxLinkRef.from_et(el, doc_frags)
-        assert isinstance(ref, OdxLinkRef)
-        unit_refs.append(ref)
-
-    return UnitGroup(
-        short_name=short_name,
-        category=category,
-        unit_refs=unit_refs,
-        oid=oid,
-        long_name=long_name,
-        description=description
-    )
-
-
-def read_unit_spec_from_odx(et_element, doc_frags: List[OdxDocFragment]):
-
-    unit_groups = [read_unit_group_from_odx(el, doc_frags)
-                   for el in et_element.iterfind("UNIT-GROUPS/UNIT-GROUP")]
-    units = [read_unit_from_odx(el, doc_frags)
-             for el in et_element.iterfind("UNITS/UNIT")]
-    physical_dimensions = [read_physical_dimension_from_odx(el, doc_frags)
-                           for el in et_element.iterfind("PHYSICAL-DIMENSIONS/PHYSICAL-DIMENSION")]
-    return UnitSpec(
-        unit_groups=unit_groups,
-        units=units,
-        physical_dimensions=physical_dimensions
-    )
+        for sdg in self.sdgs:
+            sdg._resolve_references(odxlinks)

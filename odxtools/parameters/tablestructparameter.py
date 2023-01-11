@@ -7,6 +7,7 @@ from .parameterbase import Parameter
 
 class TableStructParameter(Parameter):
     def __init__(self,
+                 *,
                  short_name,
                  table_key_ref=None,
                  table_key_snref=None,
@@ -14,7 +15,8 @@ class TableStructParameter(Parameter):
                  byte_position=None,
                  bit_position=None,
                  semantic=None,
-                 description=None):
+                 description=None,
+                 **kwargs):
         super().__init__(
             short_name=short_name,
             long_name=long_name,
@@ -22,7 +24,8 @@ class TableStructParameter(Parameter):
             bit_position=bit_position,
             parameter_type="TABLE-STRUCT",
             semantic=semantic,
-            description=description
+            description=description,
+            **kwargs
         )
         if table_key_ref:
             self.table_key_ref = table_key_ref

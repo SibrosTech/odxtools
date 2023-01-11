@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 class TableKeyParameter(Parameter):
     def __init__(self,
+                 *,
                  short_name,
                  table_ref=None,
                  table_snref=None,
@@ -21,7 +22,8 @@ class TableKeyParameter(Parameter):
                  byte_position=None,
                  bit_position=None,
                  semantic=None,
-                 description=None):
+                 description=None,
+                 **kwargs):
         super().__init__(
             short_name=short_name,
             long_name=long_name,
@@ -29,7 +31,8 @@ class TableKeyParameter(Parameter):
             bit_position=bit_position,
             parameter_type="TABLE-KEY",
             semantic=semantic,
-            description=description
+            description=description,
+            **kwargs
         )
         self.table_ref = None
         self.table_snref = None
@@ -71,6 +74,7 @@ class TableKeyParameter(Parameter):
     def resolve_references(self,
                            parent_dl: "DiagLayer",
                            odxlinks: OdxLinkDatabase):
+        super()._resolve_references(odxlinks)
         self.table = None
         if self.table_snref:
             self.table = parent_dl.local_diag_data_dictionary_spec.tables[self.table_snref]

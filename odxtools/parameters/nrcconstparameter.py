@@ -2,6 +2,7 @@
 # Copyright (c) 2022 MBition GmbH
 
 from typing import List
+import warnings
 from ..decodestate import DecodeState
 from ..encodestate import EncodeState
 from ..diagcodedtypes import DiagCodedType
@@ -21,9 +22,15 @@ class NrcConstParameter(Parameter):
     See ASAM MCD-2 D (ODX), p. 77-79.
     """
 
-    def __init__(self, short_name, diag_coded_type: DiagCodedType, coded_values: List[int], **kwargs):
-        super().__init__(short_name,
-                         parameter_type="NRC-CONST", **kwargs)
+    def __init__(self,
+                 *,
+                 short_name,
+                 diag_coded_type: DiagCodedType,
+                 coded_values: List[int],
+                 **kwargs):
+        super().__init__(short_name=short_name,
+                         parameter_type="NRC-CONST",
+                         **kwargs)
 
         self._diag_coded_type = diag_coded_type
         # TODO: Does it have to be an integer or is that just common practice?
@@ -83,12 +90,12 @@ class NrcConstParameter(Parameter):
 
         # Check if the coded value in the message is correct.
         if coded_value not in self.coded_values:
-            raise DecodeError(
+            warnings.warn(
                 f"Coded constant parameter does not match! "
                 f"The parameter {self.short_name} expected a coded value in {self.coded_values} but got {coded_value} "
                 f"at byte position {decode_state.next_byte_position} "
                 f"in coded message {decode_state.coded_message.hex()}."
-            )
+            , DecodeError)
 
         return coded_value, next_byte_position
 

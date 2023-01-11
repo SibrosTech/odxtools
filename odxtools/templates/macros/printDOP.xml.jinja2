@@ -4,28 +4,16 @@
  # Copyright (c) 2022 MBition GmbH
 -#}
 
+{%- import('macros/printSpecialData.xml.jinja2') as psd %}
+
 {%- macro printDiagCodedType(dct) -%}
-<DIAG-CODED-TYPE BASE-DATA-TYPE="{{dct.base_data_type.value}}"
- {%- filter odxtools_collapse_xml_attribute %}
-  {%- if dct.base_type_encoding %}
-                 BASE-TYPE-ENCODING="{{dct.base_type_encoding}}"
-  {%- endif %}
- {%- endfilter %}
- {%- filter odxtools_collapse_xml_attribute %}
-  {%- if dct.termination %}
-                 TERMINATION="{{dct.termination}}"
-  {%- endif %}
- {%- endfilter %}
- {%- filter odxtools_collapse_xml_attribute %}
-  {%- if dct.is_highlow_byte_order %}
-                 IS-HIGHLOW-BYTE-ORDER="true"
-  {%- else %}
-                 IS-HIGHLOW-BYTE-ORDER="false"
-  {%- endif %}
- {%- endfilter %}
- {%- filter odxtools_collapse_xml_attribute %}
-                 xsi:type="{{dct.dct_type}}" >
- {%- endfilter %}
+<DIAG-CODED-TYPE {{-make_xml_attrib("BASE-DATA-TYPE", dct.base_data_type.value)}}
+                 {{-make_xml_attrib("BASE-TYPE-ENCODING", dct.base_type_encoding)}}
+                 {{-make_bool_xml_attrib("IS-HIGHLOW-BYTE-ORDER", dct.is_highlow_byte_order_raw)}}
+                 {%- if dct.termination is defined %}
+                 {{-make_xml_attrib("TERMINATION", dct.termination)}}
+                 {%- endif %}
+                 {#- #} xsi:type="{{dct.dct_type}}">
  {%- if dct.dct_type in ("STANDARD-LENGTH-TYPE", "LEADING-LENGTH-INFO-TYPE") %}
  <BIT-LENGTH>{{dct.bit_length}}</BIT-LENGTH>
  {%- else %}
@@ -50,6 +38,14 @@
 {%- endif %}
 {%- endmacro -%}
 
+{%- macro printLimitValue(lv) -%}
+{%- if hasattr(lv, 'hex') %}
+{#- bytes or bytarray limit #}
+{{lv.hex()}}
+{%- else %}
+{{lv}}
+{%- endif %}
+{%- endmacro -%}
 
 {%- macro printCompuMethod(cm) -%}
 <COMPU-METHOD>
@@ -68,10 +64,10 @@
     </DESC>
    {%- endif %}
    {%- if cs.lower_limit is not none %}
-    <LOWER-LIMIT>{{cs.lower_limit.value}}</LOWER-LIMIT>
+    <LOWER-LIMIT>{{printLimitValue(cs.lower_limit.value)}}</LOWER-LIMIT>
    {%- endif %}
    {%- if cs.upper_limit is not none %}
-    <UPPER-LIMIT>{{cs.upper_limit.value}}</UPPER-LIMIT>
+    <UPPER-LIMIT>{{printLimitValue(cs.upper_limit.value)}}</UPPER-LIMIT>
    {%- endif %}
    {%- if cs.compu_inverse_value is not none %}
     <COMPU-INVERSE-VALUE>
@@ -89,11 +85,11 @@
  <COMPU-INTERNAL-TO-PHYS>
 		<COMPU-SCALES>
 			<COMPU-SCALE>
-   {%- if cm.internal_lower_limit.interval_type.value != "INFINITE" and cm.internal_lower_limit is not none %}
-				<LOWER-LIMIT>{{cm.internal_lower_limit.value}}</LOWER-LIMIT>
+   {%- if cm.internal_lower_limit is not none and cm.internal_lower_limit.interval_type.value != "INFINITE" %}
+				<LOWER-LIMIT>{{printLimitValue(cm.internal_lower_limit.value)}}</LOWER-LIMIT>
    {%- endif %}
-   {%- if cm.internal_upper_limit.interval_type.value != "INFINITE" and cm.internal_upper_limit is not none %}
-				<UPPER-LIMIT>{{cm.internal_upper_limit.value}}</UPPER-LIMIT>
+   {%- if cm.internal_upper_limit is not none and cm.internal_upper_limit.interval_type.value != "INFINITE" %}
+				<UPPER-LIMIT>{{printLimitValue(cm.internal_upper_limit.value)}}</UPPER-LIMIT>
    {%- endif %}
 				<COMPU-RATIONAL-COEFFS>
 					<COMPU-NUMERATOR>
@@ -115,11 +111,11 @@
 		<COMPU-SCALES>
   {%- for lm in cm.linear_methods %}
  		<COMPU-SCALE>
-   {%- if lm.internal_lower_limit.interval_type.value != "INFINITE" and lm.internal_lower_limit is not none %}
-				<LOWER-LIMIT>{{lm.internal_lower_limit.value}}</LOWER-LIMIT>
+   {%- if lm.internal_lower_limit is not none and lm.internal_lower_limit.interval_type.value != "INFINITE" %}
+				<LOWER-LIMIT>{{printLimitValue(lm.internal_lower_limit.value)}}</LOWER-LIMIT>
    {%- endif %}
-   {%- if lm.internal_upper_limit.interval_type.value != "INFINITE" and lm.internal_upper_limit is not none %}
-				<UPPER-LIMIT>{{lm.internal_upper_limit.value}}</UPPER-LIMIT>
+   {%- if lm.internal_upper_limit is not none and lm.internal_upper_limit.interval_type.value != "INFINITE" %}
+				<UPPER-LIMIT>{{printLimitValue(lm.internal_upper_limit.value)}}</UPPER-LIMIT>
    {%- endif %}
 				<COMPU-RATIONAL-COEFFS>
 					<COMPU-NUMERATOR>
@@ -142,7 +138,7 @@
   <COMPU-SCALES>
   {%- for idx in range( cm.internal_points | length ) %}
    <COMPU-SCALE>
-    <LOWER-LIMIT INTERVAL-TYPE="CLOSED">{{ cm.internal_points[idx] }}</LOWER-LIMIT>
+    <LOWER-LIMIT INTERVAL-TYPE="CLOSED">{{ printLimitValue(cm.internal_points[idx]) }}</LOWER-LIMIT>
     <COMPU-CONST>
      <V>{{ cm.physical_points[idx] }}</V>
     </COMPU-CONST>
@@ -154,36 +150,36 @@
 </COMPU-METHOD>
 {%- endmacro -%}
 
-
 {%- macro printDOP(dop, tag_name) %}
 <{{tag_name}} ID="{{dop.odx_id.local_id}}">
  <SHORT-NAME>{{dop.short_name}}</SHORT-NAME>
  <LONG-NAME>{{dop.long_name|e}}</LONG-NAME>
-{%- if dop.compu_method is defined %}
+ {{- psd.printSpecialDataGroups(dop.sdgs)|indent(2, first=True) }}
+ {%- if dop.compu_method is defined %}
  {{ printCompuMethod(dop.compu_method)|indent(1) }}
-{%- endif %}
-{%- if dop.diag_coded_type is defined %}
+ {%- endif %}
+ {%- if dop.diag_coded_type is defined %}
  {{ printDiagCodedType(dop.diag_coded_type)|indent(1) -}}
-{%- endif -%}
+ {%- endif -%}
  {{ printPhysicalType(dop.physical_type)|indent(1) }}
-{%- if dop.unit_ref %}
+ {%- if dop.unit_ref %}
  <UNIT-REF ID-REF="{{ dop.unit_ref.ref_id }}" />
-{%- endif %}
+ {%- endif %}
 </{{tag_name}}>
 {%- endmacro -%}
-
 
 {%- macro printDTCDOP(dop) %}
 <DTC-DOP ID="{{dop.odx_id.local_id}}">
  <SHORT-NAME>{{dop.short_name}}</SHORT-NAME>
- <LONG-NAME>{{dop.long_name}}</LONG-NAME>
- {{ printDiagCodedType(dop.diag_coded_type)|indent(1) -}}
- {{ printPhysicalType(dop.physical_type)|indent(1) }}
- {{ printCompuMethod(dop.compu_method)|indent(1) }}
+ <LONG-NAME>{{dop.long_name|e}}</LONG-NAME>
+ {{- psd.printSpecialDataGroups(dop.sdgs)|indent(2, first=True) }}
+ {{- printDiagCodedType(dop.diag_coded_type)|indent(1, first=True) }}
+ {{- printPhysicalType(dop.physical_type)|indent(1, first=True) }}
+ {{- printCompuMethod(dop.compu_method)|indent(1, first=True) }}
  <DTCS>
  {%- for dtc in dop.dtcs %}
- {%- if dtc.dtc_ref is defined   %}
-  <DTC-REF ID-REF="{{dop.dtc_ref.ref_id}}" />
+ {%- if hasattr(dtc, "dtc_ref") %}
+  <DTC-REF ID-REF="{{dtc.dtc_ref.ref_id}}" />
  {%- else %}
   <DTC ID="{{dtc.odx_id.local_id}}">
    <SHORT-NAME>{{dtc.short_name}}</SHORT-NAME>
@@ -195,6 +191,7 @@
   {%- if not dtc.level is none   %}
    <LEVEL>{{dtc.level}}</LEVEL>
   {%- endif %}
+   {{- psd.printSpecialDataGroups(dtc.sdgs)|indent(3, first=True) }}
   </DTC>
  {%- endif %}
  {%- endfor %}
