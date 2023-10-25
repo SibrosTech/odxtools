@@ -1,9 +1,10 @@
 {#- -*- mode: sgml; tab-width: 1; indent-tabs-mode: nil -*-
  #
  # SPDX-License-Identifier: MIT
- # Copyright (c) 2022 MBition GmbH
 -#}
 
+{%- import('macros/printElementID.xml.jinja2') as peid %}
+{%- import('macros/printAdminData.xml.jinja2') as pad %}
 {%- import('macros/printAudience.xml.jinja2') as paud %}
 {%- import('macros/printSpecialData.xml.jinja2') as psd %}
 
@@ -14,15 +15,10 @@
 {%-  set semattrib = " SEMANTIC=\"UNKNOWN\"" -%}
 {%- endif -%}
 <DIAG-SERVICE ID="{{service.odx_id.local_id}}" {{semattrib}}>
- <SHORT-NAME>{{service.short_name}}</SHORT-NAME>
-{%- if service.long_name and service.long_name.strip() %}
- <LONG-NAME>{{service.long_name|e}}</LONG-NAME>
-{%- endif %}
-{%- if service.description and service.description.strip() %}
- <DESC>
- {{service.description}}
- </DESC>
-{%- endif %}
+ {{ peid.printElementID(service)|indent(1) }}
+ {%- if service.admin_data %}
+ {{- pad.printAdminData(service.admin_data)|indent(1, first=True) }}
+ {%- endif %}
  {{- psd.printSpecialDataGroups(service.sdgs)|indent(1, first=True) }}
 {%- if service.functional_class_refs %}
  <FUNCT-CLASS-REFS>
@@ -34,17 +30,31 @@
 {%- if service.audience %}
  {{ paud.printAudience(service.audience)|indent(1) }}
 {%- endif%}
+ {%- if service.pre_condition_state_refs %}
+ <PRE-CONDITION-STATE-REFS>
+   {%- for ps_ref in service.pre_condition_state_refs %}
+   <PRE-CONDITION-STATE-REF ID-REF="{{ps_ref.ref_id}}" />
+   {%- endfor %}
+ </PRE-CONDITION-STATE-REFS>
+ {%- endif%}
+ {%- if service.state_transition_refs %}
+ <STATE-TRANSITION-REFS>
+   {%- for st_ref in service.state_transition_refs %}
+   <STATE-TRANSITION-REF ID-REF="{{st_ref.ref_id}}" />
+   {%- endfor %}
+ </STATE-TRANSITION-REFS>
+ {%- endif%}
  <REQUEST-REF ID-REF="{{service.request_ref.ref_id}}"/>
-{%- if service.pos_res_refs %}
+{%- if service.pos_response_refs %}
  <POS-RESPONSE-REFS>
-{%- for ref in service.pos_res_refs %}
+{%- for ref in service.pos_response_refs %}
   <POS-RESPONSE-REF ID-REF="{{ref.ref_id}}" />
 {%- endfor %}
  </POS-RESPONSE-REFS>
 {%- endif%}
-{%- if service.neg_res_refs %}
+{%- if service.neg_response_refs %}
  <NEG-RESPONSE-REFS>
-{%- for ref in service.neg_res_refs %}
+{%- for ref in service.neg_response_refs %}
   <NEG-RESPONSE-REF ID-REF="{{ref.ref_id}}" />
 {%- endfor %}
  </NEG-RESPONSE-REFS>

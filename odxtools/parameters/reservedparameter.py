@@ -1,72 +1,45 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
-import warnings
+from dataclasses import dataclass
+from typing import Optional, Tuple, cast
+
 from ..decodestate import DecodeState
-from ..exceptions import DecodeError
+from ..encodestate import EncodeState
+from ..odxtypes import ParameterValue
+from .parameter import Parameter, ParameterType
 
-from .parameterbase import Parameter
 
+@dataclass
 class ReservedParameter(Parameter):
-    def __init__(self,
-                 *,
-                 bit_length,
-                 **kwargs):
-        super().__init__(parameter_type="RESERVED", **kwargs)
-        self._bit_length = bit_length
+    bit_length: int
 
     @property
-    def bit_length(self):
-        return self._bit_length
+    def parameter_type(self) -> ParameterType:
+        return "RESERVED"
 
-    def is_required(self):
+    @property
+    def is_required(self) -> bool:
         return False
 
-    def is_optional(self):
+    @property
+    def is_settable(self) -> bool:
         return False
 
-    def get_coded_value(self):
-        return 0
+    def get_static_bit_length(self) -> Optional[int]:
+        return self.bit_length
 
-    def get_coded_value_as_bytes(self, encode_state):
+    def get_coded_value_as_bytes(self, encode_state: EncodeState) -> bytes:
         bit_position_int = self.bit_position if self.bit_position is not None else 0
-        return int(0).to_bytes((self.bit_length + bit_position_int + 7) // 8, "big")
+        return (0).to_bytes((self.bit_length + bit_position_int + 7) // 8, "big")
 
-    def decode_from_pdu(self, decode_state: DecodeState):
-        byte_position = self.byte_position if self.byte_position is not None else decode_state.next_byte_position
-        bit_position_int = self.bit_position if self.bit_position is not None else 0
-        byte_length = (self.bit_length + bit_position_int + 7) // 8
-        val_as_bytes = decode_state.coded_message[byte_position:byte_position+byte_length]
-        next_byte_position = byte_position + byte_length
+    def decode_from_pdu(self, decode_state: DecodeState) -> Tuple[ParameterValue, int]:
+        byte_position = (
+            self.byte_position if self.byte_position is not None else decode_state.cursor_position)
+        abs_bit_position = byte_position * 8 + (self.bit_position or 0)
+        bit_length = self.bit_length
 
-        # Check that reserved bits are 0
-        expected = sum(2**i for i in range(bit_position_int,
-                                           bit_position_int + self.bit_length))
-        actual = int.from_bytes(val_as_bytes, "big")
+        # the cursor points to the first byte which has not been fully
+        # consumed
+        cursor_position = (abs_bit_position + bit_length) // 8
 
-        # Bit-wise compare if reserved bits are 0.
-        if expected & actual != 0:
-            warnings.warn(
-                f"Reserved bits must be Zero! "
-                f"The parameter {self.short_name} expected {self.bit_length} bits to be Zero starting at bit position {bit_position_int} "
-                f"at byte position {byte_position} "
-                f"in coded message {decode_state.coded_message.hex()}.",
-                DecodeError
-            )
-
-        return None, next_byte_position
-
-    def __repr__(self):
-        repr_str = f"ReservedParameter(short_name='{self.short_name}'"
-        if self.long_name is not None:
-            repr_str += f", long_name='{self.long_name}'"
-        if self.byte_position is not None:
-            repr_str += f", byte_position='{self.byte_position}'"
-        if self.bit_position is not None:
-            repr_str += f", bit_position='{self.bit_position}'"
-        if self.bit_length is not None:
-            repr_str += f", bit_length='{self.bit_length}'"
-        if self.semantic is not None:
-            repr_str += f", semantic='{self.semantic}'"
-        if self.description is not None:
-            repr_str += f", description='{' '.join(self.description.split())}'"
-        return repr_str + ")"
+        # ignore the value of the parameter data
+        return cast(int, None), cursor_position

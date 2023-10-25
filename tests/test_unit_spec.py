@@ -1,27 +1,32 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
 import unittest
 from xml.etree import ElementTree
 
-from odxtools.compumethods import IdenticalCompuMethod
+from odxtools.compumethods.identicalcompumethod import IdenticalCompuMethod
 from odxtools.dataobjectproperty import DataObjectProperty
-from odxtools.diagcodedtypes import StandardLengthType
 from odxtools.diagdatadictionaryspec import DiagDataDictionarySpec
 from odxtools.diaglayer import DiagLayer
-from odxtools.diaglayertype import DIAG_LAYER_TYPE
-from odxtools.odxlink import OdxDocFragment, OdxLinkId, OdxLinkRef
-from odxtools.parameters import CodedConstParameter, ValueParameter
-from odxtools.physicaltype import PhysicalType
-from odxtools.structures import Request
-from odxtools.units import (PhysicalDimension, Unit, UnitSpec)
+from odxtools.diaglayerraw import DiagLayerRaw
+from odxtools.diaglayertype import DiagLayerType
+from odxtools.exceptions import odxrequire
 from odxtools.nameditemlist import NamedItemList
-from odxtools.utils import short_name_as_id
+from odxtools.odxlink import OdxDocFragment, OdxLinkDatabase, OdxLinkId, OdxLinkRef
+from odxtools.odxtypes import DataType
+from odxtools.parameters.codedconstparameter import CodedConstParameter
+from odxtools.parameters.valueparameter import ValueParameter
+from odxtools.physicaldimension import PhysicalDimension
+from odxtools.physicaltype import PhysicalType
+from odxtools.request import Request
+from odxtools.standardlengthtype import StandardLengthType
+from odxtools.unit import Unit
+from odxtools.unitspec import UnitSpec
 
-doc_frags = [ OdxDocFragment("UnitTest", "WinneThePoh") ]
+doc_frags = [OdxDocFragment("UnitTest", "WinneThePoh")]
+
 
 class TestUnitSpec(unittest.TestCase):
 
-    def test_read_odx(self):
+    def test_read_odx(self) -> None:
         expected = UnitSpec(
             physical_dimensions=[
                 PhysicalDimension(
@@ -49,10 +54,10 @@ class TestUnitSpec(unittest.TestCase):
                     display_name="km",
                     physical_dimension_ref=OdxLinkRef("ID.metre", doc_frags),
                     factor_si_to_unit=1000,
-                    offset_si_to_unit=0
+                    offset_si_to_unit=0,
                 )
             ],
-            unit_groups=None,
+            unit_groups=NamedItemList(),
             sdgs=[],
         )
         # Define an example ECU job as odx
@@ -64,7 +69,7 @@ class TestUnitSpec(unittest.TestCase):
                         <DISPLAY-NAME>{expected.units[0].display_name}</DISPLAY-NAME>
                         <FACTOR-SI-TO-UNIT>{expected.units[0].factor_si_to_unit}</FACTOR-SI-TO-UNIT>
                         <OFFSET-SI-TO-UNIT>{expected.units[0].offset_si_to_unit}</OFFSET-SI-TO-UNIT>
-                        <PHYSICAL-DIMENSION-REF ID-REF="{expected.units[0].physical_dimension_ref.ref_id}" />
+                        <PHYSICAL-DIMENSION-REF ID-REF="{odxrequire(expected.units[0].physical_dimension_ref).ref_id}" />
                     </UNIT>
                 </UNITS>
                 <PHYSICAL-DIMENSIONS>
@@ -77,39 +82,31 @@ class TestUnitSpec(unittest.TestCase):
         """
         et_element = ElementTree.fromstring(sample_unit_spec_odx)
         spec = UnitSpec.from_et(et_element, doc_frags)
-        self.assertEqual(
-            expected.units,
-            spec.units
-        )
-        self.assertEqual(
-            expected.physical_dimensions,
-            spec.physical_dimensions
-        )
-        self.assertEqual(
-            expected.unit_groups,
-            spec.unit_groups
-        )
-        self.assertEqual(
-            expected,
-            spec
-        )
+        self.assertEqual(expected.units, spec.units)
+        self.assertEqual(expected.physical_dimensions, spec.physical_dimensions)
+        self.assertEqual(expected.unit_groups, spec.unit_groups)
+        self.assertEqual(expected, spec)
 
-    def test_resolve_references(self):
-        unit = Unit(odx_id=OdxLinkId("unit_time_id", doc_frags),
-                    oid=None,
-                    short_name="second",
-                    long_name=None,
-                    description=None,
-                    display_name="s",
-                    physical_dimension_ref=None,
-                    factor_si_to_unit=1,
-                    offset_si_to_unit=0)
-        dct = StandardLengthType(base_data_type="A_UINT32",
-                                 base_type_encoding=None,
-                                 bit_length=8,
-                                 bit_mask=None,
-                                 is_highlow_byte_order_raw=None,
-                                 is_condensed_raw=None)
+    def test_resolve_odxlinks(self) -> None:
+        unit = Unit(
+            odx_id=OdxLinkId("unit_time_id", doc_frags),
+            oid=None,
+            short_name="second",
+            long_name=None,
+            description=None,
+            display_name="s",
+            physical_dimension_ref=None,
+            factor_si_to_unit=1,
+            offset_si_to_unit=0,
+        )
+        dct = StandardLengthType(
+            base_data_type=DataType.A_UINT32,
+            base_type_encoding=None,
+            bit_length=8,
+            bit_mask=None,
+            is_highlow_byte_order_raw=None,
+            is_condensed_raw=None,
+        )
         dop = DataObjectProperty(
             odx_id=OdxLinkId("dop_id", doc_frags),
             short_name="dop_sn",
@@ -117,78 +114,99 @@ class TestUnitSpec(unittest.TestCase):
             description=None,
             is_visible_raw=None,
             diag_coded_type=dct,
-            physical_type=PhysicalType("A_UINT32",
-                                       display_radix=None,
-                                       precision=None),
-            compu_method=IdenticalCompuMethod(internal_type="A_UINT32",
-                                              physical_type="A_UINT32"),
+            physical_type=PhysicalType(DataType.A_UINT32, display_radix=None, precision=None),
+            compu_method=IdenticalCompuMethod(
+                internal_type=DataType.A_UINT32, physical_type=DataType.A_UINT32),
             unit_ref=OdxLinkRef.from_id(unit.odx_id),
-            sdgs=[]
+            sdgs=[],
         )
-        dl = DiagLayer(
-            variant_type=DIAG_LAYER_TYPE.BASE_VARIANT,
+        dl_raw = DiagLayerRaw(
+            variant_type=DiagLayerType.BASE_VARIANT,
             odx_id=OdxLinkId("BV_id", doc_frags),
             short_name="BaseVariant",
             long_name=None,
             description=None,
+            admin_data=None,
+            company_datas=NamedItemList(),
             parent_refs=[],
             communication_parameters=[],
-            services=[],
-            requests=[Request(odx_id=OdxLinkId("rq_id", doc_frags),
-                              short_name="rq_sn",
-                              long_name=None,
-                              description=None,
-                              is_visible_raw=None,
-                              parameters=[
-                                  CodedConstParameter(short_name="sid",
-                                                      long_name=None,
-                                                      description=None,
-                                                      semantic=None,
-                                                      diag_coded_type=dct,
-                                                      coded_value=0x12,
-                                                      byte_position=None,
-                                                      bit_position=None,
-                                                      sdgs=[]),
-                                  ValueParameter(short_name="time",
-                                                 long_name=None,
-                                                 description=None,
-                                                 semantic=None,
-                                                 dop_ref=OdxLinkRef.from_id(dop.odx_id),
-                                                 dop_snref=None,
-                                                 physical_default_value_raw=None,
-                                                 byte_position=None,
-                                                 bit_position=None,
-                                                 sdgs=[]),
-                              ],
-                              byte_size=None)],
-            positive_responses=[],
-            negative_responses=[],
-            single_ecu_jobs=[],
-            diag_comm_refs=[],
-            diag_data_dictionary_spec=DiagDataDictionarySpec(data_object_props=[dop],
-                                                             unit_spec=UnitSpec(units=[unit],
-                                                                                physical_dimensions=None,
-                                                                                unit_groups=None,
-                                                                                sdgs=[],),
-                                                             dtc_dops = NamedItemList(short_name_as_id, []),
-                                                             structures = NamedItemList(short_name_as_id, []),
-                                                             end_of_pdu_fields = NamedItemList(short_name_as_id, []),
-                                                             tables = NamedItemList(short_name_as_id, []),
-                                                             env_data_descs = NamedItemList(short_name_as_id, []),
-                                                             env_datas = NamedItemList(short_name_as_id, []),
-                                                             muxs = NamedItemList(short_name_as_id, []),
-                                                             sdgs = []
-                                                             ),
-            additional_audiences=[],
-            functional_classes=[],
-            states=[],
-            state_transitions=[],
+            ecu_variant_patterns=[],
+            diag_comms=[],
+            requests=NamedItemList([
+                Request(
+                    odx_id=OdxLinkId("rq_id", doc_frags),
+                    short_name="rq_sn",
+                    long_name=None,
+                    description=None,
+                    sdgs=[],
+                    is_visible_raw=None,
+                    parameters=NamedItemList([
+                        CodedConstParameter(
+                            short_name="sid",
+                            long_name=None,
+                            description=None,
+                            semantic=None,
+                            diag_coded_type=dct,
+                            coded_value=0x12,
+                            byte_position=None,
+                            bit_position=None,
+                            sdgs=[],
+                        ),
+                        ValueParameter(
+                            short_name="time",
+                            long_name=None,
+                            description=None,
+                            semantic=None,
+                            dop_ref=OdxLinkRef.from_id(dop.odx_id),
+                            dop_snref=None,
+                            physical_default_value_raw=None,
+                            byte_position=None,
+                            bit_position=None,
+                            sdgs=[],
+                        ),
+                    ]),
+                    byte_size=None,
+                )
+            ]),
+            positive_responses=NamedItemList(),
+            negative_responses=NamedItemList(),
+            global_negative_responses=NamedItemList(),
+            diag_data_dictionary_spec=DiagDataDictionarySpec(
+                data_object_props=NamedItemList([dop]),
+                unit_spec=UnitSpec(
+                    units=[unit],
+                    physical_dimensions=NamedItemList(),
+                    unit_groups=NamedItemList(),
+                    sdgs=[],
+                ),
+                dtc_dops=NamedItemList(),
+                structures=NamedItemList(),
+                end_of_pdu_fields=NamedItemList(),
+                dynamic_length_fields=NamedItemList(),
+                tables=NamedItemList(),
+                env_data_descs=NamedItemList(),
+                env_datas=NamedItemList(),
+                muxs=NamedItemList(),
+                sdgs=[],
+            ),
+            additional_audiences=NamedItemList(),
+            functional_classes=NamedItemList(),
+            state_charts=NamedItemList(),
             import_refs=[],
-            sdgs=[])
-        dl.finalize_init()
+            sdgs=[],
+        )
+        dl = DiagLayer(diag_layer_raw=dl_raw)
+        odxlinks = OdxLinkDatabase()
+        odxlinks.update(dl._build_odxlinks())
+        dl._resolve_odxlinks(odxlinks)
+        dl._finalize_init(odxlinks)
 
-        self.assertEqual(dl.requests[0].parameters[1].dop.unit, unit)
+        param = dl.requests[0].parameters[1]
+        assert isinstance(param, ValueParameter)
+        _dop = param.dop
+        assert isinstance(_dop, DataObjectProperty)
+        self.assertEqual(_dop.unit, unit)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

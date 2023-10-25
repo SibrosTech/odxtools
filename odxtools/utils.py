@@ -1,13 +1,11 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
+import dataclasses
 import re
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from xml.etree import ElementTree
 
 
-def create_description_from_et(
-    et_element: Optional[ElementTree.Element],
-) -> Optional[str]:
+def create_description_from_et(et_element: Optional[ElementTree.Element],) -> Optional[str]:
     """Read a description tag.
 
     The description is located underneath the DESC tag of an an ODX
@@ -17,34 +15,29 @@ def create_description_from_et(
         return None
 
     if et_element.tag != "DESC":
-        raise TypeError(
-            f"Attempted to extract an ODX description from a "
-            f"'{et_element.tag}' XML node. (Must be a 'DESC' node!)"
-        )
+        raise TypeError(f"Attempted to extract an ODX description from a "
+                        f"'{et_element.tag}' XML node. (Must be a 'DESC' node!)")
 
     # Extract the contents of the tag as a XHTML string.
     raw_string = et_element.text or ""
     for e in et_element:
         raw_string += ElementTree.tostring(e, encoding="unicode")
 
-    return raw_string.strip()
+    # remove white spaces at the beginning and at the end of lines
+    stripped_lines = [x.strip() for x in raw_string.split("\n")]
+
+    return "\n".join(stripped_lines).strip()
 
 
-def short_name_as_id(obj: Any) -> str:
-    """Retrieve an object's `short_name` attribute into a valid python identifier.
+def dataclass_fields_asdict(obj: Any) -> Dict[str, Any]:
+    """Extract all attributes from a dataclass object that are fields.
 
-    Although short names are almost identical to python identifiers,
-    their first character is allowed to be a number. This method
-    prepends an underscore to such such shortnames.
+    This is a non-recursive version of `dataclasses.asdict()`. Its
+    purpose is to make hierarchies of dataclasses possible while
+    initializing the base class using common code.
+
     """
-
-    sn = obj.short_name
-    assert isinstance(sn, str)
-
-    if sn[0].isdigit():
-        return f"_{sn}"
-
-    return sn
+    return {x.name: getattr(obj, x.name) for x in dataclasses.fields(obj)}
 
 
 # ISO 22901 section 7.1.1

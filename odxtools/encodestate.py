@@ -1,29 +1,33 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
-from typing import Any, Dict, NamedTuple, Optional, Union
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from .odxlink import OdxLinkId
+if TYPE_CHECKING:
+    from .tablerow import TableRow
 
-class EncodeState(NamedTuple):
-    """Utility class to be used while encoding a message.
 
-    While encoding parameters may update the dicts with new keys 
-    but this is the only allowed change.
-    In particular the coded_message is not updated in-place.
-    Instead the new encode state can be constructed with::
-
-        for p in self.parameters:
-            prefix = p.encode_into_pdu(encode_state)
-            encode_state = encode_state._replace(coded_message=prefix)
-
+@dataclass
+class EncodeState:
+    """Utility class to holding the state variables needed for encoding a message.
     """
+
+    #: payload that is constructed so far
     coded_message: bytes
-    """payload that is constructed so far"""
+
+    #: a mapping from short name to value for each parameter
     parameter_values: Dict[str, Any]
-    """a mapping from short name to value for each parameter"""
-    triggering_request: Optional[Union[bytes, bytearray]] = None
-    """If encoding a response: request that triggered the response"""
-    length_keys: Dict[OdxLinkId, int] = {}
-    """Mapping from IDs to bit lengths (specified by LengthKeyParameters)"""
+
+    #: If encoding a response: request that triggered the response
+    triggering_request: Optional[bytes] = None
+
+    #: Mapping from the short name of a length-key parameter to bit
+    #: lengths (specified by LengthKeyParameter)
+    length_keys: Dict[str, int] = field(default_factory=dict)
+
+    #: Mapping from the short name of a table-key parameter to the
+    #: corresponding row of the table (specified by TableKeyParameter)
+    table_keys: Dict[str, "TableRow"] = field(default_factory=dict)
+
+    #: Flag whether we are currently the last parameter of the PDU
+    #: (needed for MinMaxLengthType)
     is_end_of_pdu: bool = False
-    """Flag whether the parameter is the last on the PDU (needed for MinMaxLengthType)"""

@@ -1,65 +1,70 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
-from typing import TYPE_CHECKING, Optional, Union
+from copy import copy
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
-from ..dataobjectproperty import DataObjectProperty, DopBase, DtcDop
+from ..dataobjectproperty import DataObjectProperty
 from ..decodestate import DecodeState
+from ..dopbase import DopBase
+from ..dtcdop import DtcDop
 from ..encodestate import EncodeState
+from ..exceptions import odxassert, odxrequire
+from ..odxlink import OdxLinkDatabase, OdxLinkId, OdxLinkRef
+from ..odxtypes import ParameterValue
 from ..physicaltype import PhysicalType
-from ..globals import logger
-from ..odxlink import OdxLinkRef, OdxLinkDatabase
-
-from .parameterbase import Parameter
+from .parameter import Parameter
 
 if TYPE_CHECKING:
     from ..diaglayer import DiagLayer
 
+
+@dataclass
 class ParameterWithDOP(Parameter):
-    def __init__(self,
-                 *,
-                 parameter_type: str,
-                 dop_ref: Optional[OdxLinkRef],
-                 dop_snref: Optional[str],
-                 **kwargs) -> None:
-        super().__init__(parameter_type=parameter_type, **kwargs)
-        self.dop_ref = dop_ref
-        self.dop_snref = dop_snref
+    dop_ref: Optional[OdxLinkRef]
+    dop_snref: Optional[str]
 
-    @property
-    def dop(self) -> Optional[DopBase]:
-        """may be a DataObjectProperty, a Structure or None"""
-
-        return self._dop
-
-    def _resolve_references(self,
-                            parent_dl: "DiagLayer",
-                            odxlinks: OdxLinkDatabase) -> None:
-        super()._resolve_references(parent_dl, odxlinks)
-
+    def __post_init__(self) -> None:
+        odxassert(self.dop_snref is not None or self.dop_ref is not None,
+                  f"Param {self.short_name} without a DOP-(SN)REF should not exist!")
         self._dop: Optional[DopBase] = None
 
+    def _build_odxlinks(self) -> Dict[OdxLinkId, Any]:
+        return super()._build_odxlinks()
+
+    def _resolve_odxlinks(self, odxlinks: OdxLinkDatabase) -> None:
+        super()._resolve_odxlinks(odxlinks)
+
+        if self.dop_ref is not None:
+            odxassert(self.dop_snref is None)
+            # TODO: do not do lenient resolves here. The problem is
+            # that currently not all kinds of DOPs are internalized
+            # (e.g., static and dynamic fields)
+            self._dop = odxlinks.resolve_lenient(self.dop_ref)
+
+    def _resolve_snrefs(self, diag_layer: "DiagLayer") -> None:
+        super()._resolve_snrefs(diag_layer)
+
         if self.dop_snref:
-            dop = parent_dl.data_object_properties.get(self.dop_snref)
-            if dop is None:
-                logger.info(
-                    f"Param {self.short_name} could not resolve DOP-SNREF {self.dop_snref}")
-            else:
-                self._dop = dop
-        elif self.dop_ref:
-            dop = odxlinks.resolve_lenient(self.dop_ref) # TODO: non-lenient!
-            if dop is None:
-                logger.info(
-                    f"Param {self.short_name} could not resolve DOP-REF {self.dop_ref}")
-            else:
-                self._dop = dop
-        else:
-            logger.warn(
-                f"Param {self.short_name} without DOP-(SN)REF should not exist!")
+            spec = diag_layer.diag_data_dictionary_spec
+            self._dop = (
+                spec.end_of_pdu_fields.get(self.dop_snref) or
+                spec.dynamic_length_fields.get(self.dop_snref) or
+                spec.data_object_props.get(self.dop_snref) or spec.structures.get(self.dop_snref) or
+                spec.muxs.get(self.dop_snref) or spec.dtc_dops.get(self.dop_snref) or
+                spec.muxs.get(self.dop_snref) or spec.env_data_descs.get(self.dop_snref) or
+                spec.env_datas.get(self.dop_snref))
 
     @property
-    def bit_length(self):
-        if self.dop is not None:
-            return self.dop.bit_length
+    def dop(self) -> DopBase:
+        """may be a DataObjectProperty, a Structure or None"""
+
+        return odxrequire(
+            self._dop, "Specifying a data object property is mandatory but it "
+            "could not be resolved")
+
+    def get_static_bit_length(self) -> Optional[int]:
+        if self._dop is not None:
+            return self._dop.get_static_bit_length()
         else:
             return None
 
@@ -70,47 +75,21 @@ class ParameterWithDOP(Parameter):
         else:
             return None
 
-    def get_coded_value(self, physical_value=None):
-        return self.dop.convert_physical_to_internal(physical_value)
-
-    def get_coded_value_as_bytes(self, encode_state: EncodeState):
-        assert self.dop is not None, "Reference to DOP is not resolved"
+    def get_coded_value_as_bytes(self, encode_state: EncodeState) -> bytes:
+        dop = odxrequire(self.dop, "Reference to DOP is not resolved")
         physical_value = encode_state.parameter_values[self.short_name]
         bit_position_int = self.bit_position if self.bit_position is not None else 0
-        return self.dop.convert_physical_to_bytes(physical_value,
-                                                  encode_state,
-                                                  bit_position=bit_position_int)
+        return dop.convert_physical_to_bytes(
+            physical_value, encode_state, bit_position=bit_position_int)
 
-    def decode_from_pdu(self, decode_state: DecodeState):
-        assert self.dop is not None, "Reference to DOP is not resolved"
-        if self.byte_position is not None and self.byte_position != decode_state.next_byte_position:
-            decode_state = decode_state._replace(
-                next_byte_position=self.byte_position)
+    def decode_from_pdu(self, decode_state: DecodeState) -> Tuple[ParameterValue, int]:
+        decode_state = copy(decode_state)
+        if self.byte_position is not None and self.byte_position != decode_state.cursor_position:
+            decode_state.cursor_position = self.byte_position
 
         # Use DOP to decode
         bit_position_int = self.bit_position if self.bit_position is not None else 0
-        phys_val, next_byte_position = \
-            self.dop.convert_bytes_to_physical(decode_state,
-                                               bit_position=bit_position_int)
+        phys_val, cursor_position = self.dop.convert_bytes_to_physical(
+            decode_state, bit_position=bit_position_int)
 
-        return phys_val, next_byte_position
-
-    def _as_dict(self):
-        d = super()._as_dict()
-        if self.dop is not None:
-            if self.bit_length is not None:
-                d["bit_length"] = self.bit_length
-            d["dop_ref"] = OdxLinkRef.from_id(self.dop.odx_id)
-        elif self.dop_ref is not None:
-            d["dop_ref"] = self.dop_ref
-        elif self.dop_snref is not None:
-            d["dop_snref"] = self.dop_snref
-
-        return d
-
-    def __str__(self):
-        lines = [
-            super().__str__(),
-            " " + str(self.dop).replace("\n", "\n ")
-        ]
-        return "\n".join(lines)
+        return phys_val, cursor_position

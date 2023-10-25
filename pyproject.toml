@@ -1,11 +1,126 @@
 [build-system]
-
 requires = [
-    "setuptools>=42",
-    "wheel"
+    "setuptools >= 59",
+    "setuptools_scm[toml]>=6.2",
+    "wheel >= 0.41"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "odxtools"
+description = "Utilities to work with the ODX standard for automotive diagnostics"
+license = {text = "MIT"}
+authors = [
+    {name = "Katrin Bauer", email = "katrin.bauer@mbition.io"},
+    {name = "Andreas Lauser", email = "andreas.lauser@mbition.io"},
+    {name = "Ayoub Kaanich", email = "kayoub5@live.com"},
+]
+maintainers = [
+    {name = "Andreas Lauser", email = "andreas.lauser@mbition.io"},
+    {name = "Ayoub Kaanich", email = "kayoub5@live.com"},
+]
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ['can', 'can bus', 'DoIP', 'odx', 'pdx', 'obd', 'uds', 'automotive', 'diagnostics']
+classifiers = [
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Development Status :: 5 - Production/Stable',
+    'Environment :: Console',
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: OS Independent',
+]
+dependencies = [
+    "bitstruct >= 8.17",
+    "argparse_addons >= 0.12",
+    "jinja2 >= 3.1",
+    "python-can >= 4.2",
+    "markdownify >= 0.11",
+    "deprecation >= 2.1",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+browse-tool = [
+     "PyInquirer >= 1.0",
 ]
 
-build-backend = "setuptools.build_meta"
+test = [
+     "mypy >= 1.5",
+     "ruff >= 0.0.290",
+     "pytest >= 7.4",
+     "coverage >= 7.3",
+]
+
+examples = [
+     "can-isotp >= 1.9",
+]
+
+all = [
+     "odxtools[browse-tool,test,examples]"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/mercedes-benz/odxtools"
+"Bug Tracker" = "https://github.com/mercedes-benz/odxtools/issues"
+"Repository" = "https://github.com/mercedes-benz/odxtools"
+
+[project.scripts]
+odxtools = "odxtools.__init__:_main"
+
+[tool.setuptools]
+packages = [ "odxtools" ]
+
+[tool.setuptools_scm]
+write_to = "odxtools/version.py"
+
+[tool.mypy]
+
+exclude = [
+	'build',
+]
+
+ignore_missing_imports = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+select = [
+    "E",  # pycodestyle Error
+    "W",  # pycodestyle Warning
+    "F",  # pyflakes
+    "B",  # pyflakes-bugbear
+    "UP",  # pyupgrade
+    "C4",  # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line too long
+    "F541",  # f-string-missing-placeholders
+]
+
+exclude = [
+    "doc",
+]
+
+# Assume Python 3.8.
+target-version = "py38"
+
+[tool.ruff.isort]
+known-first-party = ["odxtools"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.yapf]
+based_on_style = "yapf"
+column_limit = 100
+indent_width = 4
+split_before_dict_set_generator = 1
+split_before_first_argument = 0
+split_penalty_after_opening_bracket=1000
 
 [tool.pytest.ini_options]
 filterwarnings = [

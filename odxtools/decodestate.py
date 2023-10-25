@@ -1,19 +1,18 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
-from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Union
+from dataclasses import dataclass
 
-if TYPE_CHECKING:
-    from .parameters.parameterbase import Parameter
+from .odxtypes import ParameterValueDict
 
-class ParameterValuePair(NamedTuple):
-    parameter: "Parameter"
-    value: Union[str, int, bytes, bytearray, Dict]
 
-class DecodeState(NamedTuple):
+@dataclass
+class DecodeState:
     """Utility class to be used while decoding a message."""
-    coded_message: Union[bytes, bytearray]
-    """bytes to be decoded"""
-    parameter_value_pairs: List[ParameterValuePair]
-    """values of already decoded parameters"""
-    next_byte_position: int
-    """Position of the next parameter if its position is not specified in ODX"""
+
+    #: bytes to be decoded
+    coded_message: bytes
+
+    #: values of already decoded parameters
+    parameter_values: ParameterValueDict
+
+    #: Position of the next parameter if its position is not specified in ODX
+    cursor_position: int

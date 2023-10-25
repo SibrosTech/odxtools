@@ -1,7 +1,6 @@
 {#- -*- mode: sgml; tab-width: 1; indent-tabs-mode: nil -*-
  #
  # SPDX-License-Identifier: MIT
- # Copyright (c) 2022 MBition GmbH
 -#}
 {%- import('macros/printComparam.xml.jinja2') as pcp %}
 {#- -#}
@@ -37,7 +36,7 @@
   {%- if cp.prot_stack_snref is not none %}
   <PROT-STACK-SNREF SHORT-NAME="{{cp.prot_stack_snref}}"/>
   {%- endif %}
-  {%- if cp.prot_stack_snref is not none %}
+  {%- if cp.protocol_snref is not none %}
   <PROTOCOL-SNREF SHORT-NAME="{{cp.protocol_snref}}"/>
   {%- endif %}
 </COMPARAM-REF>

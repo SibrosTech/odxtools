@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
 import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type, TypeVar, overload
-from xml.etree.ElementTree import Element
+from xml.etree import ElementTree
 
-from .exceptions import OdxWarning
+from .exceptions import OdxWarning, odxassert
 
 
 @dataclass(frozen=True)
@@ -13,10 +12,14 @@ class OdxDocFragment:
     doc_name: str
     doc_type: Optional[str]
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Any) -> bool:
         if other is None:
-            # if the other document fragment is not specified, we treat it as a wildcard...
+            # if the other document fragment is not specified, we
+            # treat it as a wildcard...
             return True
+
+        if not isinstance(other, OdxDocFragment):
+            return False
 
         # the ODX spec says that the doctype can be ignored...
         return self.doc_name == other.doc_name
@@ -60,13 +63,12 @@ class OdxLinkId:
         # i.e. the same OdxId object can be put into all of them.
         return self.local_id == other.local_id
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"OdxLinkId('{self.local_id}')"
 
     @staticmethod
-    def from_et(
-        et: Element, doc_fragments: List[OdxDocFragment]
-    ) -> Optional["OdxLinkId"]:
+    def from_et(et: ElementTree.Element,
+                doc_fragments: List[OdxDocFragment]) -> Optional["OdxLinkId"]:
         """Construct an OdxLinkId for a given XML node (ElementTree object).
 
         Returns None if the given XML node does not exhibit an ID.
@@ -101,13 +103,12 @@ class OdxLinkRef:
 
     @overload
     @staticmethod
-    def from_et(et: Element, source_doc_frags: List[OdxDocFragment]) -> "OdxLinkRef":
+    def from_et(et: ElementTree.Element, source_doc_frags: List[OdxDocFragment]) -> "OdxLinkRef":
         ...
 
     @staticmethod
-    def from_et(
-        et: Optional[Element], source_doc_frags: List[OdxDocFragment]
-    ) -> Optional["OdxLinkRef"]:
+    def from_et(et: Optional[ElementTree.Element],
+                source_doc_frags: List[OdxDocFragment]) -> Optional["OdxLinkRef"]:
         """Construct an OdxLinkRef for a given XML node (ElementTree object).
 
         Returns None if the given XML node does not represent a reference.
@@ -123,9 +124,9 @@ class OdxLinkRef:
         doc_ref = et.attrib.get("DOCREF")
         doc_type = et.attrib.get("DOCTYPE")
 
-        assert (doc_ref is not None and doc_type is not None) or (
-            doc_ref is None and doc_type is None
-        ), "DOCREF and DOCTYPE must both either be specified or omitted"
+        odxassert((doc_ref is not None and doc_type is not None) or
+                  (doc_ref is None and doc_type is None),
+                  "DOCREF and DOCTYPE must both either be specified or omitted")
 
         # if the target document fragment is specified by the
         # reference, use it, else use the document fragment containing
@@ -142,7 +143,7 @@ class OdxLinkRef:
         """Construct an OdxLinkRef for a given OdxLinkId."""
         return OdxLinkRef(odxid.local_id, odxid.doc_fragments)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"OdxLinkRef('{self.ref_id}')"
 
     def __contains__(self, odx_id: OdxLinkId) -> bool:
@@ -152,7 +153,7 @@ class OdxLinkRef:
 
         # we must reference at to at least of the ID's document
         # fragments
-        if not any([ref_doc in odx_id.doc_fragments for ref_doc in self.ref_docs]):
+        if not any(ref_doc in odx_id.doc_fragments for ref_doc in self.ref_docs):
             return False
 
         # the local ID of the reference and the object ID must match
@@ -187,8 +188,6 @@ class OdxLinkDatabase:
         If the database does not contain any object which is referred to, a
         KeyError exception is raised.
         """
-        assert isinstance(ref, OdxLinkRef)
-
         odx_id = OdxLinkId(ref.ref_id, ref.ref_docs)
         for ref_frag in reversed(ref.ref_docs):
             doc_frag_db = self._db.get(ref_frag)
@@ -200,30 +199,37 @@ class OdxLinkDatabase:
                     f"Warning: Unknown document fragment {ref_frag} "
                     f"when resolving reference {ref}",
                     OdxWarning,
+                    stacklevel=1,
                 )
                 continue
 
             obj = doc_frag_db.get(odx_id)
             if obj is not None:
                 if expected_type is not None:
-                    assert isinstance(obj, expected_type)
-                    return obj
+                    odxassert(isinstance(obj, expected_type))
 
                 return obj
 
-        raise KeyError(
-            f"ODXLINK reference {ref} could not be resolved for any "
-            f"of the document fragments {ref.ref_docs}"
-        )
+        raise KeyError(f"ODXLINK reference {ref} could not be resolved for any "
+                       f"of the document fragments {ref.ref_docs}")
 
-    def resolve_lenient(self, ref: OdxLinkRef) -> Optional[Any]:
+    @overload
+    def resolve_lenient(self, ref: OdxLinkRef, expected_type: None = None) -> Any:
+        ...
+
+    @overload
+    def resolve_lenient(self, ref: OdxLinkRef, expected_type: Type[T]) -> Optional[T]:
+        ...
+
+    def resolve_lenient(self,
+                        ref: OdxLinkRef,
+                        expected_type: Optional[Type[T]] = None) -> Optional[Any]:
         """
         Resolve a reference to an object
 
         If the database does not contain any object which is referred to, None
         is returned.
         """
-        assert isinstance(ref, OdxLinkRef)
 
         odx_id = OdxLinkId(ref.ref_id, ref.ref_docs)
         for ref_frag in reversed(ref.ref_docs):
@@ -236,11 +242,15 @@ class OdxLinkDatabase:
                     f"Warning: Unknown document fragment {ref_frag} "
                     f"when resolving reference {ref}",
                     OdxWarning,
+                    stacklevel=1,
                 )
                 continue
 
             obj = doc_frag_db.get(odx_id)
             if obj is not None:
+                if expected_type is not None:
+                    odxassert(isinstance(obj, expected_type))
+
                 return obj
 
         return None
@@ -257,6 +267,6 @@ class OdxLinkDatabase:
         for odx_id, obj in new_entries.items():
             for doc_frag in odx_id.doc_fragments:
                 if doc_frag not in self._db:
-                    self._db[doc_frag] = dict()
+                    self._db[doc_frag] = {}
 
                 self._db[doc_frag][odx_id] = obj

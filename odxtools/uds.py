@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
 from enum import IntEnum
 from itertools import chain
-from typing import Optional, Union, ByteString
+from typing import Optional
 
 import odxtools.obd as obd
+
 
 class UDSSID(IntEnum):
     """The service IDs standardized by UDS.
 
     For additional information, see https://en.wikipedia.org/wiki/Unified_Diagnostic_Services
     """
+
     # 0x10..0x3e: UDS standardized service IDs
     DiagnosticSessionControl = 0x10
     EcuReset = 0x11
@@ -46,8 +47,53 @@ class UDSSID(IntEnum):
 
     # 0xBA..0xBE: Reserved for ECU specific services
 
+
+_sid_to_name = {
+    0x10: "Diagnostic Session Control",
+    0x11: "ECU Reset",
+    0x27: "Security Access",
+    0x28: "Communication Control",
+    0x29: "Authentication",
+    0x3e: "Tester Present",
+    0x83: "Access Timing Parameter",
+    0x84: "Secured Data Transmission",
+    0x85: "Control DTC Settings",
+    0x86: "Response on Event",
+    0x87: "Link Control",
+    0x22: "Read Data by Identifier ",
+    0x23: "Read Memory by Address",
+    0x24: "Read Scaling Data by Identifier",
+    0x2a: "Read Data by Periodic Identifier",
+    0x2c: "Dynamically Define Data Identifier",
+    0x2e: "Write Data by Identifier",
+    0x3d: "Write Memory by Address ",
+    0x14: "Clear Diagnostic Information",
+    0x19: "Read DTC Information",
+    0x2f: "Input Output Control by Identifier",
+    0x31: "Routine Control",
+    0x34: "Request Download",
+    0x35: "Request Upload",
+    0x36: "Transfer Data",
+    0x37: "Request Transfer Exit",
+    0x38: "Request File Transfer",
+}
+
 # add the OBD SIDs to the ones from UDS
-SID = IntEnum('UdsSID', ((i.name, i.value) for i in chain(obd.SID, UDSSID)))  # type: ignore
+SID = IntEnum("UdsSID", ((i.name, i.value) for i in chain(obd.SID, UDSSID)))  # type: ignore[misc]
+
+
+def sid_to_name(sid: int) -> Optional[str]:
+    if sid in _sid_to_name:
+        return _sid_to_name[sid]
+    elif 0x81 <= sid and sid <= 0x82:
+        return "KWP2000 Communication on K-Line"
+    elif 0xa0 <= sid and sid <= 0xb9:
+        return "OEM Specific"
+    elif 0xba <= sid and sid <= 0xbe:
+        return "ECU Specific"
+
+    return None
+
 
 class NegativeResponseCodes(IntEnum):
     """The standardized negative response codes of UDS.
@@ -56,43 +102,47 @@ class NegativeResponseCodes(IntEnum):
     service_id_of_request, response_code]`. The meaning of the last
     byte is what's defined here.
     """
+
     GeneralReject = 0x10
     ServiceNotSupported = 0x11
     SubFunctionNotSupported = 0x12
-    InvalidFormat = 0x13 # Incorrect message length of request or invalid format
-    TooLong = 0x14 # Response would be too long
-    Busy = 0x21 # please repeat!
-    ConditionsIncorrect = 0x22 # request cannot be satisfied because ECU is in wrong state
+    InvalidFormat = 0x13  # Incorrect message length of request or invalid format
+    TooLong = 0x14  # Response would be too long
+    Busy = 0x21  # please repeat!
+    ConditionsIncorrect = 0x22  # request cannot be satisfied because ECU is in wrong state
     RequestSequenceError = 0x24
-    NoResponseFromSubNetComponent = 0x25 # we pinged a slave ECU bit it did not respond in time
-    Failure = 0x26 # failure prevents execution of requested action
+    NoResponseFromSubNetComponent = 0x25  # we pinged a slave ECU bit it did not respond in time
+    Failure = 0x26  # failure prevents execution of requested action
     RequestOutOfRange = 0x31
     SecurityAccessDenied = 0x33
     InvalidKey = 0x35
     ExceededNumberOfAttempts = 0x36
     RequiredTimeDelayNotExpired = 0x37
-    Reserved = 0x4F # reserved by Extended Data Link Security Document
+    Reserved = 0x4F  # reserved by Extended Data Link Security Document
     UpDownloadNotAccepted = 0x70
     TransferDataSuspended = 0x71
     GeneralProgrammingFailure = 0x72
     WrongBlockSequenceCounter = 0x73
-    ResponsePending = 0x78 # Request correctly received, but response is still pending
+    ResponsePending = 0x78  # Request correctly received, but response is still pending
     SubFunctionNotSupportedInActiveSession = 0x7E
     ServiceNotSupportedInActiveSession = 0x7F
 
-# get the ID of a positive response
-def positive_response_id(service_id: int) -> int:
-    """Given a service ID of a request, return the corresponding SID for a positive response"""
-    assert service_id != 0x7f - 0x40
-    return service_id + 0x40
 
-NegativeResponseId = 0x7f
+# get the ID of a positive response
+def positive_response_id(request_service_id: int) -> int:
+    """Given a service ID of a request, return the corresponding SID for a positive response"""
+    return request_service_id + 0x40
+
+
+NegativeResponseId = 0x7F
+
+
 def negative_response_id(service_id: int) -> int:
     """Given a service ID of a request, return the corresponding SID for a negative response"""
-    assert service_id != 0x7f - 0x40  # TODO: What is this assert supposed to do?
     return NegativeResponseId
 
-def is_reponse_pending(telegram_payload: ByteString, request_sid: Optional[int] = None) -> bool:
+
+def is_reponse_pending(telegram_payload: bytes, request_sid: Optional[int] = None) -> bool:
     # "response pending" responses exhibit at least three bytes
     if len(telegram_payload) < 3:
         return False

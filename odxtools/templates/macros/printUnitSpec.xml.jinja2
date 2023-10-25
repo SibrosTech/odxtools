@@ -1,7 +1,6 @@
 {#- -*- mode: sgml; tab-width: 1; indent-tabs-mode: nil -*-
  #
  # SPDX-License-Identifier: MIT
- # Copyright (c) 2022 MBition GmbH
 -#}
 
 {%- import('macros/printElementID.xml.jinja2') as peid %}
@@ -38,7 +37,7 @@
 {%- macro printUnit(unit) -%}
 <UNIT ID="{{unit.odx_id.local_id}}"
       {{-make_xml_attrib("OID", unit.oid)}}>
- {{ peid.printElementID(unit) }}
+ {{ peid.printElementID(unit)|indent(1) }}
  <DISPLAY-NAME>{{ unit.display_name }}</DISPLAY-NAME>
  {%- if unit.factor_si_to_unit is not none %}
  <FACTOR-SI-TO-UNIT>{{ unit.factor_si_to_unit }}</FACTOR-SI-TO-UNIT>
@@ -54,8 +53,8 @@
 
 {%- macro printUnitGroup(group) -%}
 <UNIT-GROUP {%- if group.oid %} OID="{{group.oid}}" {%- endif %}>
- {{ peid.printElementID(group) }}
- <CATEGORY>{{ group.category }}</CATEGORY>
+ {{ peid.printElementID(group)|indent(1) }}
+ <CATEGORY>{{ group.category.value }}</CATEGORY>
  {%- if group.unit_refs %}
  <UNIT-REFS>
  {%- for ref in group.unit_refs %}
@@ -69,7 +68,7 @@
 {%- macro printPhysicalDimesion(dim) -%}
 <PHYSICAL-DIMENSION ID="{{dim.odx_id.local_id}}"
                     {{-make_xml_attrib("OID",dim.oid)}}>
- {{ peid.printElementID(dim) }}
+ {{ peid.printElementID(dim)|indent(1) }}
  {%- if dim.length_exp %}
  <LENGTH-EXP>{{ dim.length_exp }}</LENGTH-EXP>
  {%- endif %}

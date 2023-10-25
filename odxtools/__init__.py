@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
 """odxtools is a set of utilities to deal with automotive diagnostic
 descriptions of electronic control units using ODX-formatted
 description files.
@@ -63,44 +62,17 @@ References
 - _`[ISO22901]` The ISO 22901 Standard: https://www.iso.org/standard/41207.html
 
 """
-from . import database
-from .database import Database
-
-from .diaglayer import DiagLayer
-
-from .service import DiagService
-from .singleecujob import SingleEcuJob
-
-from .structures import Request, Response
-
-from .parameters import CodedConstParameter
-from .parameters import PhysicalConstantParameter
-from .parameters import ReservedParameter
-from .parameters import ValueParameter
-from .parameters import MatchingRequestParameter
-from .parameters import SystemParameter
-from .parameters import LengthKeyParameter
-from .parameters import DynamicParameter
-from .parameters import TableStructParameter
-from .parameters import TableKeyParameter
-from .parameters import TableEntryParameter
-
-from .compumethods import IdenticalCompuMethod
-from .compumethods import TexttableCompuMethod
-from .compumethods import LinearCompuMethod
-from .compumethods import ScaleLinearCompuMethod
-
-from .write_pdx_file import write_pdx_file
-from .load_pdx_file import load_pdx_file
-from .load_odx_d_file import load_odx_d_file
 from .load_file import load_file
-
+from .load_odx_d_file import load_odx_d_file
+from .load_pdx_file import load_pdx_file
 from .version import __version__
-from .exceptions import *
+from .write_pdx_file import write_pdx_file
 
-__author__ = 'Katrin Bauer'
+__author__ = "Katrin Bauer"
 
-def _main():
+
+def _main() -> None:
     # Command line tool
     from .cli import main as _main
+
     _main.start_cli()

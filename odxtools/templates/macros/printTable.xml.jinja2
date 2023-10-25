@@ -1,25 +1,20 @@
 {#- -*- mode: sgml; tab-width: 1; indent-tabs-mode: nil -*-
  #
  # SPDX-License-Identifier: MIT
- # Copyright (c) 2022 MBition GmbH
 -#}
 
+{%- import('macros/printElementID.xml.jinja2') as peid %}
 {%- import('macros/printSpecialData.xml.jinja2') as psd %}
 
 {%- macro printTable(table) %}
 <TABLE ID="{{table.odx_id.local_id}}"
        {{-make_xml_attrib("SEMANTIC", table.semantic)}}>
- <SHORT-NAME>{{table.short_name}}</SHORT-NAME>
-{%- if table.long_name %}
-  <LONG-NAME>{{table.long_name|e}}</LONG-NAME>
-{%- endif %}
-{%- if table.description %}
-  <DESC>{{table.description}}</DESC>
-{%- endif %}
+ {{ peid.printElementID(table)|indent(1) }}
 {%- if table.key_dop_ref %}
  <KEY-DOP-REF ID-REF="{{ table.key_dop_ref.ref_id }}" />
 {%- endif %}
-{%- for table_row in table.table_rows %}
+ {%- for table_row in table.table_rows_raw %}
+ {%- if hasattr(table_row, "key") %}
  <TABLE-ROW ID="{{table_row.odx_id.local_id}}"
             {{-make_xml_attrib("SEMANTIC", table_row.semantic)}}>
   <SHORT-NAME>{{table_row.short_name}}</SHORT-NAME>
@@ -30,11 +25,17 @@
   <DESC>{{table_row.description}}</DESC>
   {%- endif %}
   <KEY>{{table_row.key|e}}</KEY>
+  {%- if table_row.dop_ref %}
+  <DATA-OBJECT-PROP-REF ID-REF="{{ table_row.dop_ref.ref_id }}" />
+  {%- endif %}
   {%- if table_row.structure_ref %}
   <STRUCTURE-REF ID-REF="{{ table_row.structure_ref.ref_id }}" />
   {%- endif %}
   {{- psd.printSpecialDataGroups(table_row.sdgs)|indent(2, first=True) }}
  </TABLE-ROW>
+ {%- else %}
+ <TABLE-ROW-REF ID-REF="{{ table_row.ref_id }}" />
+ {%- endif %}
 {%- endfor %}
  {{- psd.printSpecialDataGroups(table.sdgs)|indent(1, first=True) }}
 </TABLE>

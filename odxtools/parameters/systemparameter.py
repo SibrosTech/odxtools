@@ -1,49 +1,32 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
+from dataclasses import dataclass
+from typing import Tuple
+
+from ..decodestate import DecodeState
+from ..encodestate import EncodeState
+from ..odxtypes import ParameterValue
+from .parameter import ParameterType
 from .parameterwithdop import ParameterWithDOP
 
+
+@dataclass
 class SystemParameter(ParameterWithDOP):
-    def __init__(self,
-                 *,
-                 sysparam,
-                 **kwargs):
-        super().__init__(parameter_type="SYSTEM", **kwargs)
-        self.sysparam = sysparam
+    sysparam: str
 
-    def is_required(self):
-        raise NotImplementedError(
-            "SystemParameter.is_required is not implemented yet.")
+    @property
+    def parameter_type(self) -> ParameterType:
+        return "SYSTEM"
 
-    def is_optional(self):
-        raise NotImplementedError(
-            "SystemParameter.is_optional is not implemented yet.")
+    @property
+    def is_required(self) -> bool:
+        raise NotImplementedError("SystemParameter.is_required is not implemented yet.")
 
-    def get_coded_value(self):
-        raise NotImplementedError(
-            "Encoding a SystemParameter is not implemented yet.")
+    @property
+    def is_settable(self) -> bool:
+        raise NotImplementedError("SystemParameter.is_settable is not implemented yet.")
 
-    def get_coded_value_as_bytes(self):
-        raise NotImplementedError(
-            "Encoding a SystemParameter is not implemented yet.")
+    def get_coded_value_as_bytes(self, encode_state: EncodeState) -> bytes:
+        raise NotImplementedError("Encoding a SystemParameter is not implemented yet.")
 
-    def decode_from_pdu(self, coded_message, default_byte_position=None):
-        raise NotImplementedError(
-            "Decoding a SystemParameter is not implemented yet.")
-
-    def __repr__(self):
-        repr_str = f"SystemParameter(short_name='{self.short_name}', sysparam='{self.sysparam}'"
-        if self.long_name is not None:
-            repr_str += f", long_name='{self.long_name}'"
-        if self.byte_position is not None:
-            repr_str += f", byte_position={self.byte_position}"
-        if self.bit_position is not None:
-            repr_str += f", bit_position={self.bit_position}"
-        if self.semantic is not None:
-            repr_str += f", semantic='{self.semantic}'"
-        if self.dop_ref is not None:
-            repr_str += f", dop_ref='{self.dop_ref}'"
-        if self.dop_snref is not None:
-            repr_str += f", dop_snref='{self.dop_snref}'"
-        if self.description is not None:
-            repr_str += f", description='{' '.join(self.description.split())}'"
-        return repr_str + ")"
+    def decode_from_pdu(self, decode_state: DecodeState) -> Tuple[ParameterValue, int]:
+        raise NotImplementedError("Decoding a SystemParameter is not implemented yet.")

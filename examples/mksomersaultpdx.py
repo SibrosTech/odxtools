@@ -1,7 +1,6 @@
 #! /usr/bin/python3
 #
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2023 MBition GmbH
 import argparse
 
 import odxtools
@@ -15,10 +14,14 @@ argparser = argparse.ArgumentParser(
         "automotive diagnostic services in python and making them interact",
         "with existing tooling.",
     ]),
-    formatter_class=argparse.RawTextHelpFormatter)
+    formatter_class=argparse.RawTextHelpFormatter,
+)
 
-argparser.add_argument("output_pdx_file", metavar="OUTPUT_PDX_FILE",
-                       help="Path to the where the resulting .pdx file is written")
+argparser.add_argument(
+    "output_pdx_file",
+    metavar="OUTPUT_PDX_FILE",
+    help="Path to the where the resulting .pdx file is written",
+)
 
 args = argparser.parse_args()
 

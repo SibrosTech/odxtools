@@ -1,0 +1,30 @@
+{#- -*- mode: sgml; tab-width: 1; indent-tabs-mode: nil -*-
+ #
+ # SPDX-License-Identifier: MIT
+-#}
+
+{%- import('macros/printElementID.xml.jinja2') as peid %}
+{%- import('macros/printState.xml.jinja2') as ps %}
+{%- import('macros/printStateTransition.xml.jinja2') as pst %}
+
+{%- macro printStateChart(state_chart) -%}
+<STATE-CHART ID="{{state_chart.odx_id.local_id}}">
+ {{ peid.printElementID(state_chart)|indent(1) }}
+ <SEMANTIC>{{state_chart.semantic}}</SEMANTIC>
+ {%- if state_chart.state_transitions %}
+ <STATE-TRANSITIONS>
+  {%- for st in state_chart.state_transitions %}
+  {{ pst.printStateTransition(st) | indent(2) }}
+  {%- endfor %}
+ </STATE-TRANSITIONS>
+ {%- endif %}
+ <START-STATE-SNREF SHORT-NAME="{{state_chart.start_state_snref}}" />
+ {%- if state_chart.states %}
+ <STATES>
+  {%- for st in state_chart.states %}
+  {{ ps.printState(st) | indent(2) }}
+  {%- endfor %}
+ </STATES>
+ {%- endif %}
+</STATE-CHART>
+{%- endmacro -%}

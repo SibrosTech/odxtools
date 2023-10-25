@@ -1,37 +1,35 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Any
+from typing import TYPE_CHECKING, Any, Dict, List
+from xml.etree import ElementTree
 
-from .utils import create_description_from_et
-from .odxlink import OdxLinkId, OdxDocFragment, OdxLinkDatabase
+from .element import IdentifiableElement
+from .odxlink import OdxDocFragment, OdxLinkDatabase, OdxLinkId
+from .utils import dataclass_fields_asdict
+
+if TYPE_CHECKING:
+    from .diaglayer import DiagLayer
+
 
 @dataclass
-class FunctionalClass:
+class FunctionalClass(IdentifiableElement):
     """
     Corresponds to FUNCT-CLASS.
     """
-    odx_id: OdxLinkId
-    short_name: str
-    long_name: Optional[str]
-    description: Optional[str]
 
     @staticmethod
-    def from_et(et_element, doc_frags: List[OdxDocFragment]):
-        short_name = et_element.findtext("SHORT-NAME")
-        odx_id = OdxLinkId.from_et(et_element, doc_frags)
-        assert odx_id is not None
+    def from_et(et_element: ElementTree.Element,
+                doc_frags: List[OdxDocFragment]) -> "FunctionalClass":
 
-        long_name = et_element.findtext("LONG-NAME")
-        description = create_description_from_et(et_element.find("DESC"))
+        kwargs = dataclass_fields_asdict(IdentifiableElement.from_et(et_element, doc_frags))
 
-        return FunctionalClass(odx_id=odx_id,
-                               short_name=short_name,
-                               long_name=long_name,
-                               description=description)
+        return FunctionalClass(**kwargs)
 
     def _build_odxlinks(self) -> Dict[OdxLinkId, Any]:
-        return { self.odx_id: self }
+        return {self.odx_id: self}
 
-    def _resolve_references(self, odxlinks: OdxLinkDatabase) -> None:
+    def _resolve_odxlinks(self, odxlinks: OdxLinkDatabase) -> None:
+        pass
+
+    def _resolve_snrefs(self, diag_layer: "DiagLayer") -> None:
         pass

@@ -1,28 +1,25 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
-from typing import Union
+from dataclasses import dataclass
 
-from ..odxtypes import DataType
+from ..odxtypes import AtomicOdxType
+from .compumethod import CompuMethod, CompuMethodCategory
 
-from .compumethodbase import CompuMethod
 
+@dataclass
 class IdenticalCompuMethod(CompuMethod):
-    def __init__(self,
-                 *,
-                 internal_type: Union[DataType, str],
-                 physical_type: Union[DataType, str]):
-        super().__init__(internal_type=internal_type,
-                         physical_type=physical_type,
-                         category="IDENTICAL")
 
-    def convert_physical_to_internal(self, physical_value):
+    @property
+    def category(self) -> CompuMethodCategory:
+        return "IDENTICAL"
+
+    def convert_physical_to_internal(self, physical_value: AtomicOdxType) -> AtomicOdxType:
         return physical_value
 
-    def convert_internal_to_physical(self, internal_value):
+    def convert_internal_to_physical(self, internal_value: AtomicOdxType) -> AtomicOdxType:
         return internal_value
 
-    def is_valid_physical_value(self, physical_value):
+    def is_valid_physical_value(self, physical_value: AtomicOdxType) -> bool:
         return self.physical_type.isinstance(physical_value)
 
-    def is_valid_internal_value(self, internal_value):
+    def is_valid_internal_value(self, internal_value: AtomicOdxType) -> bool:
         return self.internal_type.isinstance(internal_value)

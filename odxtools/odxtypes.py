@@ -1,66 +1,104 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
 from enum import Enum
-from typing import Any, Optional, Callable, Dict, Literal, Type, Union, overload
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Type, Union, overload
+from xml.etree import ElementTree
+
+from .exceptions import odxassert, odxraise, odxrequire
+
+if TYPE_CHECKING:
+    from odxtools.diagnostictroublecode import DiagnosticTroubleCode
+    from odxtools.parameters.parameter import Parameter
+
 
 def bytefield_to_bytearray(bytefield: str) -> bytearray:
-    bytes_string = [bytefield[i:i+2] for i in range(0, len(bytefield), 2)]
-    return bytearray(map(lambda x: int(x, 16), bytes_string))
+    bytes_string = [bytefield[i:i + 2] for i in range(0, len(bytefield), 2)]
+    return bytearray([int(x, 16) for x in bytes_string])
 
-PythonType = Union[str, int, float, bytearray]
-LiteralPythonType = Type[Union[str, int, float, bytearray]]
+
+AtomicOdxType = Union[str, int, float, bytes]
+
+# dictionary mapping short names to a Parameter that needs to be
+# specified. Complex parameters (structures) may contain
+# sub-parameters, so this is a recursive type...
+ParameterDict = Dict[str, Union["Parameter", "ParameterDict"]]
+
+# Dictionary mapping short names of parameters to the value it
+# exhibits. Complex parameters (structures) may contain
+# sub-parameters, so this is a recursive type, and fields encompass
+# multiple items, so this can be a list of objects.
+TableStructParameterValue = Tuple[str, "ParameterValue"]
+ParameterValue = Union[AtomicOdxType, "ParameterValueDict", TableStructParameterValue,
+                       List["ParameterValue"], "DiagnosticTroubleCode"]
+ParameterValueDict = Dict[str, ParameterValue]
+
 
 @overload
-def odxstr_to_bool(str_val: None) -> None: ...
+def odxstr_to_bool(str_val: None) -> None:
+    ...
+
 
 @overload
-def odxstr_to_bool(str_val: str) -> bool: ...
+def odxstr_to_bool(str_val: str) -> bool:
+    ...
+
 
 def odxstr_to_bool(str_val: Optional[str]) -> Optional[bool]:
     if str_val is None:
         return None
 
     str_val = str_val.strip()
-    assert str_val in ["0", "1", "false", "true"], \
-        f"String '{str_val}' cannot be converted to a boolean"
+    odxassert(str_val in [
+        "0",
+        "1",
+        "false",
+        "true",
+    ], f"String '{str_val}' cannot be converted to a boolean")
 
     return str_val in ["1", "true"]
 
+
 def bool_to_odxstr(bool_val: bool) -> str:
     return "true" if bool_val else "false"
+
 
 def parse_int(value: str) -> int:
     try:
         return int(value)
     except ValueError:
-        v = float(value)
+        try:
+            v = float(value)
+        except Exception as e:
+            odxraise(f"Error parsing numerical value '{value}': {e}")
+
         if not v.is_integer():
-            raise Exception(f'Value "{v}" is not valid integer')
-        assert v.is_integer()
+            odxraise(f"Expected an integer value, got {v}")
         return int(v)
 
-_ODX_TYPE_PARSER: Dict[str, Callable[[str], PythonType]] = {
+
+#: conversion functions for strings from the XML to the types stored
+#: by the internalized database
+_PARSE_ODX_TYPE: Dict[str, Callable[[str], AtomicOdxType]] = {
     "A_INT32": parse_int,
     "A_UINT32": parse_int,
     "A_FLOAT32": float,
     "A_FLOAT64": float,
     "A_UNICODE2STRING": str,
     "A_BYTEFIELD": bytefield_to_bytearray,
-    # only in DATA-TYPE not in PHYSICAL-DATA-TYPE
     "A_ASCIISTRING": str,
-    "A_UTF8STRING": str
+    "A_UTF8STRING": str,
 }
 
-_ODX_TYPE_TO_PYTHON_TYPE: Dict[str, LiteralPythonType] = {
+#: mapping from type name strings specified by the XML to the types
+#: used by the internalized database
+_ODX_TYPE_TO_PYTHON_TYPE: Dict[str, Type[AtomicOdxType]] = {
     "A_INT32": int,
     "A_UINT32": int,
     "A_FLOAT32": float,
     "A_FLOAT64": float,
     "A_UNICODE2STRING": str,
     "A_BYTEFIELD": bytearray,
-    # only in DATA-TYPE not in PHYSICAL-DATA-TYPE
     "A_ASCIISTRING": str,
-    "A_UTF8STRING": str
+    "A_UTF8STRING": str,
 }
 
 
@@ -74,23 +112,47 @@ class DataType(Enum):
     * p. 38 (Table 1): ASAM types correspondence with XML Schema types
     * p. 96: Restrictions to the bit length given the BASE-DATA-TYPE.
     """
+
     A_INT32 = "A_INT32"
     A_UINT32 = "A_UINT32"
     A_FLOAT32 = "A_FLOAT32"
     A_FLOAT64 = "A_FLOAT64"
     A_UNICODE2STRING = "A_UNICODE2STRING"
     A_BYTEFIELD = "A_BYTEFIELD"
-    # only in DATA-TYPE not in PHYSICAL-DATA-TYPE
+
+    # these two enums are only used by internal data type objects (DATA-TYPE)
+    # not by the ones for physical values (PHYSICAL-DATA-TYPE)
     A_ASCIISTRING = "A_ASCIISTRING"
     A_UTF8STRING = "A_UTF8STRING"
 
     def as_python_type(self) -> type:
         return _ODX_TYPE_TO_PYTHON_TYPE[self.value]
 
-    def from_string(self, value: str) -> Union[int, float, str, bytearray]:
-        return _ODX_TYPE_PARSER[self.value](value)
+    def from_string(self, value: str) -> AtomicOdxType:
+        return _PARSE_ODX_TYPE[self.value](value)
 
-    def make_from(self, value: Any) -> Union[int, float, str, bytearray]:
+    @overload
+    def create_from_et(self, et_element: None) -> None:
+        ...
+
+    @overload
+    def create_from_et(self, et_element: ElementTree.Element) -> AtomicOdxType:
+        ...
+
+    def create_from_et(self, et_element: Optional[ElementTree.Element]) -> Optional[AtomicOdxType]:
+        """
+            Parse a V/VT value union and return an AtomicOdxType from them that match current datatype
+            this includes, but not limited to COMPU-CONST, COMPU-DEFAULT-VALUE, COMPU-INVERSE-VALUE
+        """
+        if et_element is None:
+            return None
+        if (vt_elem := et_element.find("VT")) is not None:
+            return self.from_string(odxrequire(vt_elem.text))
+        elif (v_elem := et_element.find("V")) is not None:
+            return self.from_string(odxrequire(v_elem.text))
+        odxraise('Either V or VT needs to be specified')
+
+    def make_from(self, value: Any) -> AtomicOdxType:
         if isinstance(value, str):
             # parse the string
             return self.from_string(value)

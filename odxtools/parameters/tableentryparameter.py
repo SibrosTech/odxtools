@@ -1,40 +1,33 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
-from .parameterbase import Parameter
+from dataclasses import dataclass
+from typing import Tuple
 
+from ..decodestate import DecodeState
+from ..encodestate import EncodeState
 from ..odxlink import OdxLinkRef
+from ..odxtypes import ParameterValue
+from .parameter import Parameter, ParameterType
 
+
+@dataclass
 class TableEntryParameter(Parameter):
-    def __init__(self,
-                 *,
-                 target: str,
-                 table_row_ref: OdxLinkRef,
-                 **kwargs):
-        super().__init__(
-            parameter_type="TABLE-ENTRY",
-            **kwargs
-        )
+    target: str
+    table_row_ref: OdxLinkRef
 
-        assert target in ["KEY", "STRUCT"]
-        self.target = target
-        self.table_row_ref = table_row_ref
+    @property
+    def parameter_type(self) -> ParameterType:
+        return "TABLE-ENTRY"
 
-    def is_required(self):
-        raise NotImplementedError(
-            "TableKeyParameter.is_required is not implemented yet.")
+    @property
+    def is_required(self) -> bool:
+        raise NotImplementedError("TableKeyParameter.is_required is not implemented yet.")
 
-    def is_optional(self):
-        raise NotImplementedError(
-            "TableKeyParameter.is_optional is not implemented yet.")
+    @property
+    def is_settable(self) -> bool:
+        raise NotImplementedError("TableKeyParameter.is_settable is not implemented yet.")
 
-    def get_coded_value(self):
-        raise NotImplementedError(
-            "Encoding a TableKeyParameter is not implemented yet.")
+    def get_coded_value_as_bytes(self, encode_state: EncodeState) -> bytes:
+        raise NotImplementedError("Encoding a TableKeyParameter is not implemented yet.")
 
-    def get_coded_value_as_bytes(self):
-        raise NotImplementedError(
-            "Encoding a TableKeyParameter is not implemented yet.")
-
-    def decode_from_pdu(self, coded_message, default_byte_position=None):
-        raise NotImplementedError(
-            "Decoding a TableKeyParameter is not implemented yet.")
+    def decode_from_pdu(self, decode_state: DecodeState) -> Tuple[ParameterValue, int]:
+        raise NotImplementedError("Decoding a TableKeyParameter is not implemented yet.")

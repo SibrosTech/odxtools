@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
-from typing import Optional, Union
+from dataclasses import dataclass
+from typing import cast
 
-from ..odxtypes import DataType
-
-from .compumethodbase import CompuMethod
+from ..exceptions import DecodeError, EncodeError, odxassert
+from ..odxtypes import AtomicOdxType, DataType
+from .compumethod import CompuMethod, CompuMethodCategory
 from .limit import IntervalType, Limit
 
+
+@dataclass
 class LinearCompuMethod(CompuMethod):
     """Represents the decoding function d(y) = (offset + factor * y) / denominator
     where d(y) is the physical value and y is the internal value.
@@ -55,51 +57,36 @@ class LinearCompuMethod(CompuMethod):
     For example, limits given by the bit length are not considered in the compu method.)
     """
 
-    def __init__(self,
-                 *,
-                 offset: float,
-                 factor: float,
-                 denominator: float,
-                 internal_type: Union[DataType, str],
-                 physical_type: Union[DataType, str],
-                 internal_lower_limit: Optional[Limit],
-                 internal_upper_limit: Optional[Limit]):
-        super().__init__(internal_type=internal_type,
-                         physical_type=physical_type,
-                         category="LINEAR")
-        self.offset = offset
-        self.factor = factor
-        self.denominator = denominator
+    offset: float
+    factor: float
+    denominator: float
+    internal_lower_limit: Limit
+    internal_upper_limit: Limit
 
-        self.internal_lower_limit = internal_lower_limit
-        if internal_lower_limit is None or internal_lower_limit.interval_type == IntervalType.INFINITE:
-            self.internal_lower_limit = Limit(float("-inf"),
-                                              IntervalType.INFINITE)
-
-        self.internal_upper_limit = internal_upper_limit
-        if internal_upper_limit is None or internal_upper_limit.interval_type == IntervalType.INFINITE:
-            self.internal_upper_limit = Limit(float("inf"),
-                                              IntervalType.INFINITE)
-
-        assert self.internal_lower_limit is not None and self.internal_upper_limit is not None
-        assert denominator > 0 and isinstance(denominator, (int, float))
+    def __post_init__(self) -> None:
+        odxassert(self.denominator > 0)
 
         self.__compute_physical_limits()
 
     @property
-    def physical_lower_limit(self):
+    def category(self) -> CompuMethodCategory:
+        return "LINEAR"
+
+    @property
+    def physical_lower_limit(self) -> Limit:
         return self._physical_lower_limit
 
     @property
-    def physical_upper_limit(self):
+    def physical_upper_limit(self) -> Limit:
         return self._physical_upper_limit
 
-    def __compute_physical_limits(self):
+    def __compute_physical_limits(self) -> None:
         """Computes the physical limits and stores them in the properties
         self._physical_lower_limit and self._physical_upper_limit.
         This method is only called during the initialization of a LinearCompuMethod.
         """
-        def convert_to_limit_to_physical(limit: Limit, is_upper_limit: bool):
+
+        def convert_to_limit_to_physical(limit: Limit, is_upper_limit: bool) -> Limit:
             """Helper method
 
             Parameters:
@@ -109,76 +96,89 @@ class LinearCompuMethod(CompuMethod):
             is_upper_limit
                 True iff limit is the internal upper limit
             """
-            assert isinstance(limit.value, (int, float))
+            odxassert(isinstance(limit.value, (int, float)))
             if limit.interval_type == IntervalType.INFINITE:
                 return limit
-            elif limit.interval_type == limit.interval_type.OPEN and self.internal_type.as_python_type() == int:
+            elif (limit.interval_type == limit.interval_type.OPEN and
+                  self.internal_type.as_python_type() == int):
                 closed_limit = limit.value - 1 if is_upper_limit else limit.value + 1
                 return Limit(
                     value=self._convert_internal_to_physical(closed_limit),
-                    interval_type=IntervalType.CLOSED
+                    interval_type=IntervalType.CLOSED,
                 )
             else:
                 return Limit(
                     value=self._convert_internal_to_physical(limit.value),
-                    interval_type=limit.interval_type
+                    interval_type=limit.interval_type,
                 )
 
         if self.factor >= 0:
-            self._physical_lower_limit = convert_to_limit_to_physical(
-                self.internal_lower_limit, False)
-            self._physical_upper_limit = convert_to_limit_to_physical(
-                self.internal_upper_limit, True)
+            self._physical_lower_limit = convert_to_limit_to_physical(self.internal_lower_limit,
+                                                                      False)
+            self._physical_upper_limit = convert_to_limit_to_physical(self.internal_upper_limit,
+                                                                      True)
         else:
             # If the factor is negative, the lower and upper limit are swapped
-            self._physical_lower_limit = convert_to_limit_to_physical(
-                self.internal_upper_limit, True)
-            self._physical_upper_limit = convert_to_limit_to_physical(
-                self.internal_lower_limit, False)
+            self._physical_lower_limit = convert_to_limit_to_physical(self.internal_upper_limit,
+                                                                      True)
+            self._physical_upper_limit = convert_to_limit_to_physical(self.internal_lower_limit,
+                                                                      False)
 
         if self.physical_type == DataType.A_UINT32:
             # If the data type is unsigned, the physical lower limit should be at least 0.
-            if self._physical_lower_limit.interval_type == IntervalType.INFINITE or self._physical_lower_limit.value < 0:
-                self._physical_lower_limit = Limit(
-                    value=0,
-                    interval_type=IntervalType.CLOSED
-                )
+            if (self._physical_lower_limit.interval_type == IntervalType.INFINITE or
+                    cast(float, self._physical_lower_limit.value) < 0):
+                self._physical_lower_limit = Limit(value=0, interval_type=IntervalType.CLOSED)
 
-    def _convert_internal_to_physical(self, internal_value):
+    def _convert_internal_to_physical(self, internal_value: AtomicOdxType) -> AtomicOdxType:
+        if not isinstance(internal_value, (int, float)):
+            raise DecodeError("The type of internal values of linear compumethods must "
+                              "either int or float")
+
         if self.denominator is None:
             result = self.offset + self.factor * internal_value
         else:
-            result = (self.offset + self.factor *
-                      internal_value) / self.denominator
+            result = (self.offset + self.factor * internal_value) / self.denominator
 
-        if self.internal_type == DataType.A_FLOAT64 and self.physical_type in [DataType.A_INT32, DataType.A_UINT32]:
+        if self.internal_type == DataType.A_FLOAT64 and self.physical_type in [
+                DataType.A_INT32,
+                DataType.A_UINT32,
+        ]:
             result = round(result)
         return self.physical_type.make_from(result)
 
-    def convert_internal_to_physical(self, internal_value) \
-        -> Union[int, float]:
-        assert self.is_valid_internal_value(internal_value)
+    def convert_internal_to_physical(self, internal_value: AtomicOdxType) -> AtomicOdxType:
+        odxassert(self.is_valid_internal_value(internal_value))
         return self._convert_internal_to_physical(internal_value)
 
-    def convert_physical_to_internal(self, physical_value):
-        assert self.is_valid_physical_value(
-            physical_value), f"physical value {physical_value} of type {type(physical_value)} is not valid. Expected type {self.physical_type} with internal range {self.internal_lower_limit} to {self.internal_upper_limit}"
+    def convert_physical_to_internal(self, physical_value: AtomicOdxType) -> AtomicOdxType:
+        if not isinstance(physical_value, (int, float)):
+            raise EncodeError("The type of physical values of linear compumethods must "
+                              "either int or float")
+
+        odxassert(
+            self.is_valid_physical_value(physical_value),
+            f"physical value {physical_value} of type {type(physical_value)} "
+            f"is not valid. Expected type {self.physical_type} with internal "
+            f"range {self.internal_lower_limit} to {self.internal_upper_limit}")
         if self.denominator is None:
             result = (physical_value - self.offset) / self.factor
         else:
-            result = ((physical_value * self.denominator) -
-                      self.offset) / self.factor
+            result = ((physical_value * self.denominator) - self.offset) / self.factor
 
-        if self.physical_type == DataType.A_FLOAT64 and self.internal_type in [DataType.A_INT32, DataType.A_UINT32]:
+        if self.physical_type == DataType.A_FLOAT64 and self.internal_type in [
+                DataType.A_INT32,
+                DataType.A_UINT32,
+        ]:
             result = round(result)
         return self.internal_type.make_from(result)
 
-    def is_valid_physical_value(self, physical_value):
+    def is_valid_physical_value(self, physical_value: AtomicOdxType) -> bool:
         # Do type checks
         expected_type = self.physical_type.as_python_type()
-        if expected_type == float and type(physical_value) not in [int, float]:
+        if expected_type == float and not isinstance(physical_value, (int, float)):
             return False
-        elif expected_type != float and type(physical_value) != expected_type:
+        elif expected_type != float and not isinstance(physical_value, expected_type):
             return False
 
         # Compare to the limits
@@ -188,11 +188,11 @@ class LinearCompuMethod(CompuMethod):
             return False
         return True
 
-    def is_valid_internal_value(self, internal_value):
+    def is_valid_internal_value(self, internal_value: AtomicOdxType) -> bool:
         expected_type = self.internal_type.as_python_type()
-        if expected_type == float and type(internal_value) not in [int, float]:
+        if expected_type == float and not isinstance(internal_value, (int, float)):
             return False
-        elif expected_type != float and type(internal_value) != expected_type:
+        elif expected_type != float and not isinstance(internal_value, expected_type):
             return False
 
         if not self.internal_lower_limit.complies_to_lower(internal_value):

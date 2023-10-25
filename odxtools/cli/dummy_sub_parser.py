@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2022 MBition GmbH
 import argparse
 import sys
+
 
 class DummyTool:
     """A tool which acts as a placeholder for a "real" tool that
@@ -14,20 +14,21 @@ class DummyTool:
     should bail out.
     """
 
-    def __init__(self,
-                 tool_name,
-                 error):
+    def __init__(self, tool_name: str, error: Exception):
         self._odxtools_tool_name_ = tool_name
         self._error = error
 
-    def add_subparser(self, subparser_list):
-        parser = subparser_list.add_parser(
+    def add_subparser(self, subparser_list: "argparse._SubParsersAction") -> None:
+        subparser_list.add_parser(
             self._odxtools_tool_name_,
             description=f"Tool '{self._odxtools_tool_name_}' is unavailable: {self._error}",
             help="Dummy tool",
-            formatter_class=argparse.RawTextHelpFormatter)
+            formatter_class=argparse.RawTextHelpFormatter,
+        )
 
-    def run(self, args: argparse.Namespace):
-        print(f"Error: Tool '{self._odxtools_tool_name_}' is unavailable: {self._error}",
-              file=sys.stderr)
+    def run(self, args: argparse.Namespace) -> None:
+        print(
+            f"Error: Tool '{self._odxtools_tool_name_}' is unavailable: {self._error}",
+            file=sys.stderr,
+        )
         exit(1)

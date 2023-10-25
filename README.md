@@ -1,4 +1,8 @@
 <!-- SPDX-License-Identifier: MIT -->
+[![PyPi - Version](https://img.shields.io/pypi/v/odxtools)](https://pypi.org/project/odxtools)
+[![PyPI - License](https://img.shields.io/pypi/l/odxtools)](LICENSE)
+[![CI Status](https://github.com/mercedes-benz/odxtools/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/mercedes-benz/odxtools/actions?query=branch%3Amain)
+
 # odxtools
 
 `odxtools` is a set of utilities for working with diagnostic
@@ -39,6 +43,7 @@ send to/received from ECUs in an pythonic manner.
 - [Installation](#installation)
 - [Usage Examples](#usage-examples)
   - [Python snippets](#python-snippets)
+- [Using the non-strict mode](#using-the-non-strict-mode)
 - [Interactive Usage](#interactive-usage)
   - [Python REPL](#python-repl)
 - [Command line usage](#command-line-usage)
@@ -47,6 +52,7 @@ send to/received from ECUs in an pythonic manner.
   - [The `browse` subcommand](#the-browse-subcommand)
   - [The `snoop` subcommand](#the-snoop-subcommand)
   - [The `find` subcommand](#the-find-subcommand)
+  - [The `decode` subcommand](#the-decode-subcommand)
 - [Testing](#testing)
 - [Contributing](#contributing)
 - [Code of Conduct](#code-of-conduct)
@@ -84,7 +90,7 @@ rather aspirational.
 The easiest way of installing `odxtools` on your system is via `pip`:
 
 ```bash
-pip3 install odxtools
+python3 -m pip install odxtools
 ```
 
 If you want to develop `odxtools` itself, you need to install it from
@@ -99,15 +105,16 @@ After this, make sure that all python dependencies are installed:
 
 ```bash
 cd $BASE_DIR/odxtools
-pip3 install -r requirements.txt
+python3 -m pip install -e .
 ```
 
-Next, build the project and install it on the system:
+Next, you can optionally build a package and install it on the system:
 
 ```bash
 cd $BASE_DIR/odxtools
-python3 ./setup.py build
-sudo python3 ./setup.py install # <- optional
+python3 -m pip install --upgrade build
+python3 -m build
+sudo python3 -m pip install dist/odxtools-*.whl
 ```
 
 Finally, update the `PYTHONPATH` environment variable and the newly
@@ -200,6 +207,30 @@ python3 -m odxtools list -a "$YOUR_PDX_FILE"
   # -> decoded response: [session()]
   ```
 
+## Using the non-strict mode
+
+By default, odxtools raises exceptions if it suspects that it cannot
+fulfill a requested operation correctly. For example, if the dataset
+it is instructed to load is detected to be not conformant with the ODX
+specification, or if completing the operation requires missing
+features of odxtools. To be able to deal with such cases, odxtools
+provides a "non-strict" mode where such issues are ignored, but where
+the results are undefined. The following snippet shows how to instruct
+odxtools to load a non-conforming file in non-strict mode, and after
+this is done, enables the safety checks again:
+
+  ```python
+  import odxtools
+
+  [...]
+
+  odxtools.exceptions.strict_mode = False
+  botched_db = odxtools.load_file("my_non-conforming_database.pdx")
+  odxtools.exceptions.strict_mode = True
+
+  [...]
+  ```
+
 ## Interactive Usage
 
 ### Python REPL
@@ -214,16 +245,16 @@ distribtions for Windows do not enable tab-completion by default in
 their REPL.  For more convenience in such a scenario, we recommend
 using
 [ptpython](https://github.com/prompt-toolkit/ptpython/). `ptpython`
-can be installed like any other python package, i.e., via `pip3
-install ptpython`. Then, the REPL ought to be started using
+can be installed like any other python package, i.e., via `python3 -m
+pip install ptpython`. Then, the REPL ought to be started using
 
 ```cmd
 c:\odxtest>python3 "C:\Python39\Lib\site-packages\ptpython\entry_points\run_ptpython.py"
 ```
 
-Alternatively, `pyreadline` can be used after installing it via `pip3
-install wheel pyreadline`.  With this, *basic* tab-completion for
-python under Windows in [Interactive
+Alternatively, `pyreadline` can be used after installing it via
+`python3 -m pip install pyreadline`.  With this, *basic*
+tab-completion for python under Windows in [Interactive
 Mode](https://docs.python.org/3/tutorial/interpreter.html#interactive-mode)
 should work.
 
@@ -246,7 +277,7 @@ using `odxtools --help`:
 
 ```bash
 $ odxtools --help
-usage: odxtools [-h] [-c] {list,browse,snoop,find,encode-message,decode-message} ...
+usage: odxtools [-h] [--version] {list,browse,snoop,find} ...
 
 Utilities to interact with automotive diagnostic descriptions based on the ODX standard.
 
@@ -257,20 +288,17 @@ Examples:
    odxtools browse ./path/to/database.pdx
 
 positional arguments:
-  {list,browse,snoop,find,encode-message,decode-message}
+  {list,browse,snoop,find}
                         Select a sub command
     list                Print a summary of automotive diagnostic files.
     browse              Interactively browse the content of automotive diagnostic files.
     snoop               Live decoding of a diagnostic session.
-    find                Find & display services by hex-data, or name, can also decodes requests.
-    encode-message      Encode a message. Interactively asks for parameter values.
-                        This is a short cut through the browse command to directly encode a message.
-    decode-message      Decode a message. Interactively asks for parameter values.
-                        This is a short cut through the browse command to directly encode a message.
+    find                Find & display services by their name
+    decode              Decode hex-data to service-name & optionally its parameters 
 
 optional arguments:
   -h, --help            show this help message and exit
-  -c, --conformant      The input file fully confirms to the standard, i.e., disable work-arounds for bugs of the CANdela tool
+  --version             Print the odxtools version
 ```
 
 All subcommands accept the `--help` parameter:
@@ -325,7 +353,7 @@ the `--all` parameter prints all data of the file that is recognized
 by `odxtools`. Example:
 
 ```bash
-$ odxtools --conformant list $BASE_DIR/odxtools/examples/somersault.pdx --variants somersault_lazy --services do_forward_flips --params
+$ odxtools list $BASE_DIR/odxtools/examples/somersault.pdx --variants somersault_lazy --services do_forward_flips --params
 ECU-VARIANT 'somersault_lazy' (Receive ID: 0x7b, Send ID: 0x1c8)
  num services: 5, num DOPs: 6, num communication parameters: 11.
 The services of the ECU-VARIANT 'somersault_lazy' are:
@@ -385,7 +413,7 @@ navigate through the database of a `.pdx` file. For example, using the
 spamming the terminal:
 
 ```bash
-$ odxtools --conformant browse $BASE_DIR/odxtools/examples/somersault.pdx
+$ odxtools browse $BASE_DIR/odxtools/examples/somersault.pdx
 ? Select a Variant.  somersault_lazy
 ECU-VARIANT 'somersault_lazy' (Receive ID: 0x7b, Send ID: 0x1c8)
 ? The variant somersault_lazy offers the following services. Select one!  do_forward_flips
@@ -409,15 +437,39 @@ ECU-VARIANT 'somersault_lazy' (Receive ID: 0x7b, Send ID: 0x1c8)
 ### The `snoop` subcommand
 
 The `snoop` subcommand can be used to decode a trace of a or a
-currently running diagnostic session:
+currently running diagnostic session.
 
+```bash
+$ odxtools snoop -h
+usage: odxtools snoop [-h] [--active] [--channel CHANNEL] [--rx RX] [--tx TX] [--variant VARIANT]
+                      [--protocol PROTOCOL]
+                      PDX_FILE
+
+Live decoding of a diagnostic session.
+
+positional arguments:
+  PDX_FILE              path to the .pdx file
+
+options:
+  -h, --help            show this help message and exit
+  --active, -a          Active mode, sends flow control messages to receive ISO-TP telegrams successfully
+  --channel CHANNEL, -c CHANNEL
+                        CAN interface name to be used (required in active mode)
+  --rx RX, -r RX        CAN ID in which the ECU listens for diagnostic messages
+  --tx TX, -t TX        CAN ID in which the ECU sends replys to diagnostic messages  (required in active mode)
+  --variant VARIANT, -v VARIANT
+                        Name of the ECU variant which the decode process ought to be based on
+  --protocol PROTOCOL, -p PROTOCOL
+                        Name of the protocol used for decoding
+```
+Example:
 ```bash
 # create a socketcan `vcan0` interface
 sudo ip link add dev vcan0 type vcan
 sudo ip link set vcan0 up
 
 # start the snooping on vcan0
-odxtools --conformant snoop -c vcan0 --variant "somersault_lazy" $BASE_DIR/odxtools/examples/somersault.pdx
+odxtools snoop -c vcan0 --variant "somersault_lazy" $BASE_DIR/odxtools/examples/somersault.pdx
 
 # on a different terminal, run the diagnostic session
 $BASE_DIR/odxtools/examples/somersaultlazy.py -c vcan0
@@ -426,7 +478,7 @@ $BASE_DIR/odxtools/examples/somersaultlazy.py -c vcan0
 The snoop command will then output the following:
 
 ```bash
-$ odxtools --conformant snoop -c vcan0 --variant "somersault_lazy" $BASE_DIR/odxtools/examples/somersault.pdx
+$ odxtools snoop -c vcan0 --variant "somersault_lazy" $BASE_DIR/odxtools/examples/somersault.pdx
 Decoding messages on channel vcan0
 Tester: do_forward_flips(forward_soberness_check=18, num_flips=1)
  -> 7fba7f (bytearray(b'\x7f\xba\x7f'), 3 bytes)
@@ -445,21 +497,45 @@ Tester: do_forward_flips(forward_soberness_check=18, num_flips=50)
 ### The `find` subcommand
 
 The `find` subcommand can be used to find a service and its associated 
-information by either a hex request, or partial name via cli. 
-
-In addition, it can also decode a hex request and display its parameters 
-mapped to a service. 
+information by a partial name via cli. 
 
 ```bash
-$ odxtools find $BASE_DIR/odxtools/examples/somersault.pdx -D 10 00
+$ odxtools find -h
+usage: odxtools find [-h] [-v VARIANT] -s [SERVICES ...] [-nd] [-ro] PDX_FILE
 
+Find & print services by name
+
+Examples:
+  For displaying the services associated with the partial name 'Reset' without details:
+    odxtools find ./path/to/database.pdx -s "Reset" --no-details
+  For more information use:
+    odxtools find -h
+
+positional arguments:
+  PDX_FILE              Location of the .pdx file
+
+options:
+  -h, --help            show this help message and exit
+  -v VARIANT, --variants VARIANT
+                        Specifies which ecu variants should be included.
+  -s [SERVICES ...], --service-names [SERVICES ...]
+                        Print a list of diagnostic services partially matching given service names
+  -nd, --no-details     Don't show all service details
+  -ro, --relaxed-output
+                        Relax output formatting rules (allow unknown bitlengths for ascii representation)
+```
+
+Example: Find diagnostic services with the name `session_start`
+
+```bash
+$ odxtools find examples/somersault.pdx -s session_start
 
 =====================================
 somersault_lazy, somersault_assiduous
 =====================================
 
 
- session_start <ID: somersault.service.session_start>
+ session_start <ID: OdxLinkId('somersault.service.session_start')>
   Message format of a request:
            7     6     5     4     3     2     1     0  
         +-----+-----+-----+-----+-----+-----+-----+-----+
@@ -467,8 +543,8 @@ somersault_lazy, somersault_assiduous
         +-----+-----+-----+-----+-----+-----+-----+-----+
       1 | id (8 bits)                                   |
         +-----+-----+-----+-----+-----+-----+-----+-----+
-   Parameter(short_name='sid', type='CODED-CONST', semantic=None, byte_position=0, bit_length=8, coded_value='0x10')
-   Parameter(short_name='id', type='CODED-CONST', semantic=None, byte_position=1, bit_length=8, coded_value='0x0')
+   CodedConstParameter(short_name='sid', long_name=None, description=None, byte_position=0, bit_position=None, semantic=None, sdgs=[], diag_coded_type=StandardLengthType(base_data_type=<DataType.A_UINT32: 'A_UINT32'>, base_type_encoding=None, is_highlow_byte_order_raw=None, bit_length=8, bit_mask=None, is_condensed_raw=None), coded_value=16)
+   CodedConstParameter(short_name='id', long_name=None, description=None, byte_position=1, bit_position=None, semantic=None, sdgs=[], diag_coded_type=StandardLengthType(base_data_type=<DataType.A_UINT32: 'A_UINT32'>, base_type_encoding=None, is_highlow_byte_order_raw=None, bit_length=8, bit_mask=None, is_condensed_raw=None), coded_value=0)
   Number of positive responses: 1
   Message format of a positive response:
            7     6     5     4     3     2     1     0  
@@ -477,9 +553,8 @@ somersault_lazy, somersault_assiduous
         +-----+-----+-----+-----+-----+-----+-----+-----+
       1 | can_do_backward_flips (8 bits)                |
         +-----+-----+-----+-----+-----+-----+-----+-----+
-   Parameter(short_name='sid', type='CODED-CONST', semantic=None, byte_position=0, bit_length=8, coded_value='0x50')
-   Parameter(short_name='can_do_backward_flips', type='VALUE', semantic=None, byte_position=1, bit_length=8, dop_ref='somersault.DOP.boolean')
-    DataObjectProperty('boolean', category='TEXTTABLE', internal_type='A_UINT32', physical_type='A_UNICODE2STRING')
+   CodedConstParameter(short_name='sid', long_name=None, description=None, byte_position=0, bit_position=None, semantic=None, sdgs=[], diag_coded_type=StandardLengthType(base_data_type=<DataType.A_UINT32: 'A_UINT32'>, base_type_encoding=None, is_highlow_byte_order_raw=None, bit_length=8, bit_mask=None, is_condensed_raw=None), coded_value=80)
+   ValueParameter(short_name='can_do_backward_flips', long_name=None, description=None, byte_position=1, bit_position=None, semantic=None, sdgs=[], dop_ref=OdxLinkRef(ref_id='somersault.DOP.boolean', ref_docs=[OdxDocFragment(doc_name='somersault', doc_type='CONTAINER'), OdxDocFragment(doc_name='somersault', doc_type='LAYER')]), dop_snref=None, physical_default_value_raw=None)
   Number of negative responses: 1
   Message format of a negative response:
            7     6     5     4     3     2     1     0  
@@ -490,19 +565,59 @@ somersault_lazy, somersault_assiduous
         +-----+-----+-----+-----+-----+-----+-----+-----+
       2 | response_code (8 bits)                        |
         +-----+-----+-----+-----+-----+-----+-----+-----+
-   Parameter(short_name='sid', type='CODED-CONST', semantic=None, byte_position=0, bit_length=8, coded_value='0x7f')
-   Parameter(short_name='rq_sid', type='MATCHING-REQUEST-PARAM', semantic=None, byte_position=1)
-    Request byte position = 0, byte length = 1
-   Parameter(short_name='response_code', type='VALUE', semantic=None, byte_position=2, bit_length=8, dop_ref='somersault.DOP.error_code')
-    DataObjectProperty('error_code', category='IDENTICAL', internal_type='A_UINT32', physical_type='A_UINT32')
-
-Decoded Request('start_session'):
-	sid: 16
-	id: 0
+   CodedConstParameter(short_name='sid', long_name=None, description=None, byte_position=0, bit_position=None, semantic=None, sdgs=[], diag_coded_type=StandardLengthType(base_data_type=<DataType.A_UINT32: 'A_UINT32'>, base_type_encoding=None, is_highlow_byte_order_raw=None, bit_length=8, bit_mask=None, is_condensed_raw=None), coded_value=127)
+   MatchingRequestParameter(short_name='rq_sid', long_name=None, description=None, byte_position=1, bit_position=None, semantic=None, sdgs=[], request_byte_position=0, byte_length=1)
+   ValueParameter(short_name='response_code', long_name=None, description=None, byte_position=2, bit_position=None, semantic=None, sdgs=[], dop_ref=OdxLinkRef(ref_id='somersault.DOP.error_code', ref_docs=[OdxDocFragment(doc_name='somersault', doc_type='CONTAINER'), OdxDocFragment(doc_name='somersault', doc_type='LAYER')]), dop_snref=None, physical_default_value_raw=None)
 ```
 
-`odxtools find $BASE_DIR/odxtools/examples/somersault.pdx -d 10 00` would display the same information, 
-without the decoded request, and `-s <name>` can be used to find a service by partial name.
+### The `decode` subcommand
+
+The `decode` subcommand can be used to decode hex-data to a service, and its associated
+parameters.
+
+```bash
+$ odxtools decode -h
+usage: odxtools decode [-h] [-v VARIANT] -d DATA [-D] PDX_FILE
+
+Decode request by hex-data
+
+Examples:
+  For displaying the service associated with the request 10 01 & decoding it:
+    odxtools decode ./path/to/database.pdx -D -d '10 01'
+  For displaying the service associated with the request 10 01, without decoding it:
+    odxtools decode ./path/to/database.pdx -d '10 01'
+  For more information use:
+    odxtools decode -h
+
+positional arguments:
+  PDX_FILE              Location of the .pdx file
+
+options:
+  -h, --help            show this help message and exit
+  -v VARIANT, --variants VARIANT
+                        Specifies which ecu variants should be included.
+  -d DATA, --data DATA  Specify data of hex request
+  -D, --decode          Decode the given hex data
+```
+
+Example: Decode diagnostic services with the request `10 00`
+
+```bash
+$ odxtools decode examples/somersault.pdx -d '10 00'
+Binary data: 10 00
+Decoded by service 'session_start' (decoding ECUs: somersault_lazy, somersault_assiduous)
+```
+
+Example: Decode diagnostic services with the request `10 00`, and parameters
+
+```bash
+$ odxtools decode examples/somersault.pdx -d '10 00' -D
+Binary data: 10 00
+Decoded by service 'session_start' (decoding ECUs: somersault_lazy, somersault_assiduous)
+Decoded data:
+sid=16 (0x10)
+id=0 (0x0)
+```
 
 ## Testing
 
@@ -526,10 +641,6 @@ project, please read the [contributing guide](https://github.com/mercedes-benz/o
 
 Please read our [Code of Conduct](https://github.com/mercedes-benz/daimler-foss/blob/master/CODE_OF_CONDUCT.md)
 as it is our base for interaction.
-
-## License
-
-This project is licensed under the [MIT LICENSE](https://github.com/mercedes-benz/odxtools/blob/main/LICENSE).
 
 ## Provider Information
 

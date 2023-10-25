@@ -1,9 +1,9 @@
 {#- -*- mode: sgml; tab-width: 1; indent-tabs-mode: nil -*-
  #
  # SPDX-License-Identifier: MIT
- # Copyright (c) 2022 MBition GmbH
 -#}
 
+{%- import('macros/printElementID.xml.jinja2') as peid %}
 {%- import('macros/printDOP.xml.jinja2') as pdop %}
 {%- import('macros/printSpecialData.xml.jinja2') as psd %}
 
@@ -20,10 +20,7 @@
 {%- else %}
 <PARAM {{semattrib}} xsi:type="{{param.parameter_type}}">
 {%- endif%}
- <SHORT-NAME>{{param.short_name}}</SHORT-NAME>
-{%- if param.long_name %}
- <LONG-NAME>{{param.long_name|e}}</LONG-NAME>
-{%- endif %}
+ {{ peid.printElementID(param)|indent(1) }}
  {{- psd.printSpecialDataGroups(param.sdgs)|indent(1, first=True) }}
 {%- if param.byte_position is not none %}
  <BYTE-POSITION>{{param.byte_position}}</BYTE-POSITION>
@@ -38,8 +35,8 @@
 {%- endif %}
 {%- if param.coded_value is defined %}
  <CODED-VALUE>{{param.coded_value}}</CODED-VALUE>
-{%- elif param.physical_constant_value is defined %}
- <PHYS-CONSTANT-VALUE>{{param.physical_constant_value}}</PHYS-CONSTANT-VALUE>
+{%- elif param.physical_constant_value_raw is defined %}
+ <PHYS-CONSTANT-VALUE>{{param.physical_constant_value_raw}}</PHYS-CONSTANT-VALUE>
 {%- elif param.coded_values is defined %}
  <CODED-VALUES>
  {%- for coded_value in param.coded_values %}
@@ -47,10 +44,13 @@
  {%- endfor %}
  </CODED-VALUES>
 {%- endif %}
+{%- if param.physical_default_value_raw %}
+ <PHYSICAL-DEFAULT-VALUE>{{param.physical_default_value_raw}}</PHYSICAL-DEFAULT-VALUE>
+{%- endif %}
 {%- if param.dop_ref %}
  <DOP-REF ID-REF="{{param.dop_ref.ref_id}}"/>
-{%- elif param.dop is defined and param.dop is not none %}
- {{pdop.printDOP(param.dop)|indent(2)}}
+{%- elif param.dop_snref %}
+ <DOP-SNREF SN="{{param.dop_snref}}"/>
 {%- elif param.diag_coded_type is defined %}
  {{pdop.printDiagCodedType(param.diag_coded_type)|indent(2)}}
 {%- elif param.parameter_type != "MATCHING-REQUEST-PARAM" %}
