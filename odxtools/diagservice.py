@@ -35,6 +35,7 @@ class DiagService(IdentifiableElement):
     neg_response_refs: List[OdxLinkRef]
     admin_data: Optional[AdminData]
     semantic: Optional[str]
+    addressing: Optional[str]
     audience: Optional[Audience]
     functional_class_refs: Iterable[OdxLinkRef]
     pre_condition_state_refs: Iterable[OdxLinkRef]
@@ -75,6 +76,10 @@ class DiagService(IdentifiableElement):
         admin_data = AdminData.from_et(et_element.find("ADMIN-DATA"), doc_frags)
         semantic = et_element.get("SEMANTIC")
 
+        addressing = et_element.get("ADDRESSING")
+        if not addressing:
+            addressing = "PHYSICAL"
+
         audience = None
         if (audience_elem := et_element.find("AUDIENCE")) is not None:
             audience = Audience.from_et(audience_elem, doc_frags)
@@ -87,6 +92,7 @@ class DiagService(IdentifiableElement):
             neg_response_refs=neg_response_refs,
             admin_data=admin_data,
             semantic=semantic,
+            addressing=addressing,
             audience=audience,
             functional_class_refs=functional_class_refs,
             pre_condition_state_refs=pre_condition_state_refs,
