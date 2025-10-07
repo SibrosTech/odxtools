@@ -558,7 +558,7 @@ def create_any_diag_coded_type_from_et(et_element, doc_frags: List[OdxDocFragmen
     elif dct_type == "MIN-MAX-LENGTH-TYPE":
         min_length = int(et_element.findtext("MIN-LENGTH"))
         max_length = None
-        if et_element.find("MAX-LENGTH"):
+        if et_element.find("MAX-LENGTH") is not None:
             max_length = int(et_element.findtext("MAX-LENGTH"))
         termination = et_element.get("TERMINATION")
 
