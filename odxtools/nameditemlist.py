@@ -65,7 +65,7 @@ class NamedItemList(Generic[T]):
 
     def __getitem__(self, key: Union[int, str, slice]) -> T:
         if isinstance(key, int):
-            if abs(key) < -len(self._list) or key >= len(self._list):
+            if key < -len(self._list) or key >= len(self._list):
                 # we want to raise a KeyError instead of an IndexError
                 # if the index is out of range...
                 raise KeyError(f"Tried to access item {key} of a NamedItemList "
@@ -86,7 +86,7 @@ class NamedItemList(Generic[T]):
         -> Optional[T]:
 
         if isinstance(key, int):
-            if abs(key) < -len(self._list) or key >= len(self._list):
+            if key < -len(self._list) or key >= len(self._list):
                 return None
 
             return self._list[key]
