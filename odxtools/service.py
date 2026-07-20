@@ -163,7 +163,7 @@ class DiagService:
             addressing = "PHYSICAL"
 
         audience = None
-        if et_element.find("AUDIENCE"):
+        if et_element.find("AUDIENCE") is not None:
             audience = Audience.from_et(et_element.find("AUDIENCE"), doc_frags)
 
         sdgs = create_sdgs_from_et(et_element.find("SDGS"), doc_frags)
