@@ -76,7 +76,7 @@ def _parse_compu_scale_to_linear_compu_method(*,
             logger.info("Scale linear without UPPER-LIMIT")
             internal_upper_limit = internal_lower_limit
     kwargs["internal_upper_limit"] = internal_upper_limit
-    kwargs["denominator"] = 1.0
+    kwargs.setdefault("denominator", 1.0)
     kwargs["factor"] = factor
     kwargs["offset"] = offset
 
