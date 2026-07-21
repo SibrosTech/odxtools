@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2022 MBition GmbH
+import warnings
 from typing import Optional, Union
 
+from ..exceptions import OdxWarning
 from ..odxtypes import DataType
 
 from .compumethodbase import CompuMethod
@@ -115,13 +117,17 @@ class LinearCompuMethod(CompuMethod):
                 return limit
             elif limit.interval_type == limit.interval_type.OPEN and self.internal_type.as_python_type() == int:
                 closed_limit = limit.value - 1 if is_upper_limit else limit.value + 1
+                physical_value = self._convert_internal_to_physical(closed_limit)
+                self.__warn_if_limit_truncated(closed_limit, physical_value, is_upper_limit)
                 return Limit(
-                    value=self._convert_internal_to_physical(closed_limit),
+                    value=physical_value,
                     interval_type=IntervalType.CLOSED
                 )
             else:
+                physical_value = self._convert_internal_to_physical(limit.value)
+                self.__warn_if_limit_truncated(limit.value, physical_value, is_upper_limit)
                 return Limit(
-                    value=self._convert_internal_to_physical(limit.value),
+                    value=physical_value,
                     interval_type=limit.interval_type
                 )
 
@@ -144,6 +150,22 @@ class LinearCompuMethod(CompuMethod):
                     value=0,
                     interval_type=IntervalType.CLOSED
                 )
+
+    def __warn_if_limit_truncated(self, internal_value, physical_value, is_upper_limit):
+        if self.physical_type not in (DataType.A_INT32, DataType.A_UINT32):
+            return
+
+        exact_value = self.offset + self.factor * internal_value
+        if self.denominator is not None:
+            exact_value = exact_value / self.denominator
+
+        if exact_value != physical_value:
+            which = "upper" if is_upper_limit else "lower"
+            warnings.warn(
+                f"Physical {which} limit truncated from {exact_value} to {physical_value} "
+                f"due to integer physical type {self.physical_type}.",
+                OdxWarning,
+            )
 
     def _convert_internal_to_physical(self, internal_value):
         if self.denominator is None:
