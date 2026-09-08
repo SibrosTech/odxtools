@@ -57,8 +57,14 @@ class TableKeyParameter(Parameter):
         if self.table_ref:
             self.table = odxlinks.resolve(self.table_ref)
 
+        self.table_row = None
         if self.table_row_ref:
             self.table_row = odxlinks.resolve(self.table_row_ref)
+            if self.table is None and self.table_row.table_ref is not None:
+                # Do not use `self.table_row.table` here: the order of
+                # reference resolution is undefined, so the table may not
+                # have resolved its own references yet.
+                self.table = odxlinks.resolve(self.table_row.table_ref)
         if self.table_row_snref:
             self.table_row = parent_dl.local_diag_data_dictionary_spec.tables[self.table_row_snref]
 

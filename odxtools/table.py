@@ -50,13 +50,15 @@ class TableRow:
     description: Optional[str]
     semantic: Optional[str]
     sdgs: List[SpecialDataGroup]
+    table_ref: Optional[OdxLinkRef] = None
 
     def __post_init__(self) -> None:
         self._structure: Optional[DopBase] = None
         self._dop: Optional[DopBase] = None
 
     @staticmethod
-    def from_et(et_element, doc_frags: List[OdxDocFragment]) \
+    def from_et(et_element, doc_frags: List[OdxDocFragment],
+                table_ref: Optional[OdxLinkRef] = None) \
             -> "TableRow":
         """Reads a TABLE-ROW."""
         odx_id=OdxLinkId.from_et(et_element, doc_frags)
@@ -85,6 +87,7 @@ class TableRow:
             structure_ref=structure_ref,
             dop_ref=dop_ref,
             sdgs=sdgs,
+            table_ref=table_ref,
         )
 
     def _build_odxlinks(self) -> Dict[OdxLinkId, Any]:
@@ -173,7 +176,7 @@ class Table(TableBase):
         logger.debug("Parsing TABLE " + short_name)
 
         table_rows = [
-            TableRow.from_et(tr_elem, doc_frags)
+            TableRow.from_et(tr_elem, doc_frags, table_ref=OdxLinkRef.from_id(odx_id))
             for tr_elem in et_element.iterfind("TABLE-ROW")
         ]
 
