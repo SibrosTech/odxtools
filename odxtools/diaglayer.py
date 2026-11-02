@@ -157,6 +157,7 @@ class DiagLayer:
                  import_refs: List[OdxLinkRef],
                  sdgs: List[SpecialDataGroup],
                  ecu_variant_patterns: List[EcuVariantPattern] = [],
+                 admin_data: Optional[AdminData] = None,
                  ):
         logger.info(f"Initializing variant type {variant_type.value}")
         self.variant_type = variant_type
@@ -165,6 +166,7 @@ class DiagLayer:
         self.short_name = short_name
         self.long_name = long_name
         self.description = description
+        self.admin_data = admin_data
         self.sdgs = sdgs
         self.ecu_variant_patterns = ecu_variant_patterns
 
@@ -219,6 +221,9 @@ class DiagLayer:
         assert short_name is not None
         long_name = et_element.findtext("LONG-NAME")
         description = create_description_from_et(et_element.find("DESC"))
+        # Parsed for its DOC-REVISIONS only. Its references (e.g. TEAM-MEMBER-REF) point into
+        # the layer's own COMPANY-DATAS, which are not parsed here, so they are left unresolved.
+        admin_data = AdminData.from_et(et_element.find("ADMIN-DATA"), doc_frags)
 
         logger.info(f"Parsing diagnostic layer '{short_name}' "
                     f"of type {variant_type.value} ...")
@@ -351,6 +356,7 @@ class DiagLayer:
                          import_refs=import_refs,
                          sdgs=sdgs,
                          ecu_variant_patterns=ecu_variant_patterns,
+                         admin_data=admin_data,
                          )
 
     @property
